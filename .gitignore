@@ -39,3 +39,13 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+/lib/generated/prisma
+
+# Database (contains user CVs, chat history, personal data)
+dev.db
+dev.db-shm
+dev.db-wal
+prisma/dev.db
+prisma/dev.db-shm
+prisma/dev.db-wal

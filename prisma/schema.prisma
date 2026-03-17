@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../lib/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Project {
+  id             String     @id @default(cuid())
+  name           String
+  company        String?
+  position       String?
+  cvText         String?
+  jobDescription String?
+  gapAnalysis    String?
+  overallScore   Float?     @default(0)
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  chats          Chat[]
+  documents      Document[]
+}
+
+model Document {
+  id        String   @id @default(cuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String   // Original file name
+  label     String?  // User-friendly label (e.g. "Boss Review", "Certificate")
+  text      String   // Extracted text content
+  createdAt DateTime @default(now())
+}
+
+model Chat {
+  id        String    @id @default(cuid())
+  projectId String
+  project   Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  type      String    @default("preparation") // "gap_analysis" | "preparation" | "mock_interview"
+  persona   String    @default("structured")  // "structured" (E) als Default
+  createdAt DateTime  @default(now())
+  messages  Message[]
+}
+
+model Message {
+  id           String   @id @default(cuid())
+  chatId       String
+  chat         Chat     @relation(fields: [chatId], references: [id], onDelete: Cascade)
+  role         String   // "user" | "assistant" | "system"
+  content      String
+  score        Float?   // Score for user answers (1-10)
+  category     String?  // Question category
+  flagged      Boolean  @default(false) // For spaced repetition
+  cost         Float?   // Total token cost in USD
+  tokens       Int?     // Output tokens (completion) for assistant, estimated for user
+  inputTokens  Int?     // Input tokens (prompt) for assistant messages
+  model        String?  // Model used (only for assistant messages)
+  versionGroup String?  // Groups regenerated versions together
+  active       Boolean  @default(true) // Whether this version is currently displayed
+  createdAt    DateTime @default(now())
+}
