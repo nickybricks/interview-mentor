@@ -332,7 +332,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
   };
 
   // Regenerate the last assistant answer
-  const regenerateLastAnswer = async () => {
+  const regenerateLastAnswer = useCallback(async () => {
     if (streaming) return;
 
     // Remove the last assistant message from UI
@@ -399,10 +399,10 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
       setStreaming(false);
       setStreamingContent("");
     }
-  };
+  }, [streaming, chatId, streamResponse, t]);
 
   // Switch version of a message (prev/next)
-  const switchVersion = async (
+  const switchVersion = useCallback(async (
     messageId: string,
     direction: "prev" | "next"
   ) => {
@@ -444,7 +444,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     } catch (err) {
       console.error("Version switch failed:", err);
     }
-  };
+  }, []);
 
   // Handle Enter to send
   const handleKeyDown = (e: React.KeyboardEvent) => {

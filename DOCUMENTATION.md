@@ -1,6 +1,6 @@
 # Interview Mentor – Code Documentation
 
-> Last updated: March 17, 2026 | Status: Phase 1 + 2 + 3 + 4 complete (Setup + Backend + Frontend + Features) | Phase 5 (Evaluation): prompt testing documented | Phase 6 (Deploy): not started
+> Last updated: March 18, 2026 | Status: Phase 1 + 2 + 3 + 4 complete (Setup + Backend + Frontend + Features) | Phase 5 (Evaluation): prompt testing documented | Phase 6 (Deploy): not started
 
 ---
 
@@ -95,7 +95,7 @@ interview-mentor/
 ├── components/                 # ← React components
 │   ├── sidebar.tsx             #     Sidebar: project list + chat navigation
 │   ├── chat-window.tsx         #     Chat UI: messages + input + streaming
-│   ├── message-bubble.tsx      #     Single message with markdown rendering
+│   ├── message-bubble.tsx      #     Single message with markdown rendering (React.memo optimized)
 │   ├── settings-panel.tsx      #     LLM settings: model, temperature, persona
 │   ├── file-upload.tsx         #     Drag & drop PDF upload
 │   ├── new-project-dialog.tsx  #     Dialog to create a new project
@@ -363,16 +363,13 @@ t("sidebar.newProject")  // → "Neue Bewerbung" (DE) or "New Application" (EN)
 
 ### `lib/security.ts` – Security Guards
 
-6 functions (4 exported + 2 internal helpers):
+3 exported functions:
 
 | Function | What it does |
 |----------|-------------|
 | `validateMessageLength()` | Max 10,000 characters, must not be empty |
 | `sanitizeInput()` | Removes `<script>` tags, HTML, `javascript:`, event handlers |
-| `checkPromptInjection()` | Runs 40+ regex patterns against original + deobfuscated text, checks for base64-encoded payloads |
 | `validateFileBuffer()` | Max 5MB, only PDFs allowed |
-| `deobfuscate()` *(internal)* | Strips letter-by-letter obfuscation (e.g. `I.g.n.o.r.e`), collapses whitespace, removes zero-width unicode |
-| `containsSuspiciousBase64()` *(internal)* | Decodes base64 strings and checks for injection keywords |
 
 ---
 
@@ -507,21 +504,16 @@ Next.js rule: Only variables with `NEXT_PUBLIC_` prefix are visible in the brows
 | Attack | Protection | Where |
 |--------|-----------|-------|
 | **XSS** (Script Injection) | HTML tags + `<script>` are stripped | `sanitizeInput()` |
-| **Prompt Injection** | 40+ regex patterns detect manipulation attempts across 12 categories (instruction override, role hijacking, prompt extraction, DAN/jailbreak, developer impersonation, emotional manipulation, off-topic tasks, encoding evasion, game-based manipulation, unethical coaching) | `checkPromptInjection()` |
-| **Obfuscated Injection** | Text like `I.g.n.o.r.e a.l.l` is deobfuscated before pattern matching (strips dots/dashes/spaces between letters, removes zero-width unicode chars) | `deobfuscate()` |
-| **Base64-Encoded Injection** | Base64 strings ≥20 chars are decoded and checked for injection keywords (ignore, instruction, system, prompt, forget, pretend, you are) | `containsSuspiciousBase64()` |
-| **Prompt-Level Defense** | Security guardrail appended to every system prompt instructs the LLM to never reveal instructions, never break character, never help with off-topic tasks, and respond to injection attempts in-character | `route.ts` (securityGuardrail) |
+| **Prompt Injection / Off-Topic** | Handled by the system prompt — the LLM rejects, redirects, and never scores off-topic input | System prompt (`ai-settings.json` / `prompts.ts`) |
 | **File Attacks** | Only PDFs, max 5MB | `validateFileBuffer()` |
 | **Spam** | Max 10,000 characters per message | `validateMessageLength()` |
 | **API Key Leak** | Key only in .env.local, only server-side | Next.js convention |
 
-### Defense-in-Depth Strategy
+### Defense Strategy
 
-The app uses **two layers** of prompt injection protection:
+Web-level threats (XSS, spam, malicious files) are blocked by `lib/security.ts` before reaching the LLM.
 
-1. **Input-side (pre-API):** `checkPromptInjection()` blocks malicious messages before they reach OpenAI. Rejected messages return a friendly redirect: *"This doesn't seem related to interview preparation. Let's stay focused."* This layer catches obfuscated text and base64-encoded payloads.
-
-2. **Prompt-side (in-LLM):** A `securityGuardrail` block is appended to every system prompt sent to OpenAI. Even if a novel attack bypasses the regex filter, the LLM itself is instructed to refuse, stay in character, and redirect to interview prep. The guardrail covers: prompt extraction, role-breaking, off-topic tasks, unethical coaching, and all forms of social engineering.
+Prompt injection and off-topic handling are delegated entirely to the system prompt. The LLM can reason about intent and context, which avoids the false positives that regex-based detection caused (e.g. "yes" being flagged as off-topic). The Marcus Webb prompt instructs the AI to never engage with off-topic content, never score it, and redirect immediately.
 
 ---
 
@@ -1173,3 +1165,19 @@ Each test records: whether the input was blocked by the regex filter, whether th
 - **Modified files:**
   - `lib/prompts.ts` – Removed `A_minimal`, `B_detailed`, `C_socratic`, `D_strict` prompt bodies and `PROMPT_LABELS` export
   - `DOCUMENTATION.md` – Updated Section 6 prompt table to single-row (E only)
+
+### Session 17 (March 18, 2026) – Chat Input Performance Optimization
+
+**What was done:**
+
+- **Fixed slow typing in chat input.** Every keystroke called `setInput()`, which re-rendered the entire `ChatWindow` component — including all `MessageBubble` children. Each assistant message runs `ReactMarkdown` with `remark-gfm` (full markdown parsing) on every render. With many messages in a conversation, this caused noticeable input lag (milliseconds delay between keypress and character appearing).
+
+- **Root cause:** `MessageBubble` was a plain function component with no memoization. Since `ChatWindow` holds the `input` state, every keystroke triggered a full re-render cascade through all message bubbles, even though message content hadn't changed.
+
+- **Fix — `React.memo` on `MessageBubble`:** Wrapped the component with `memo()` so it only re-renders when its props actually change. Since message props (content, score, tokens, etc.) don't change when the user types, all existing messages now skip re-rendering during input.
+
+- **Fix — `useCallback` on callback props:** Wrapped `regenerateLastAnswer` and `switchVersion` in `useCallback` to stabilize their references across renders. Without this, `React.memo` would be ineffective for the last assistant message (which receives `onRegenerate`) and versioned messages (which receive `onVersionChange`), because new function references would be created on every render.
+
+- **Modified files:**
+  - `components/message-bubble.tsx` – Added `memo` import from React, wrapped `MessageBubble` export with `memo()`
+  - `components/chat-window.tsx` – Wrapped `regenerateLastAnswer` with `useCallback` (deps: `streaming`, `chatId`, `streamResponse`, `t`), wrapped `switchVersion` with `useCallback` (no deps, uses only state setters)

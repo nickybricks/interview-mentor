@@ -1,5 +1,6 @@
 "use client";
 
+import { memo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Badge } from "@/components/ui/badge";
@@ -45,7 +46,7 @@ function fmtDuration(ms: number): string {
   return `${(ms / 1000).toFixed(2)}s`;
 }
 
-export function MessageBubble({
+export const MessageBubble = memo(function MessageBubble({
   role,
   content,
   score,
@@ -276,4 +277,4 @@ export function MessageBubble({
       </div>
     </div>
   );
-}
+});
