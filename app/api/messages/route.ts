@@ -79,6 +79,7 @@ export async function POST(request: NextRequest) {
 
     // Regenerate mode: deactivate the last assistant message, keep it as a version
     let regenerateVersionGroup: string | null = null;
+    let deactivatedMessageId: string | null = null;
     if (isRegenerate) {
       const lastAssistant = await prisma.message.findFirst({
         where: { chatId, role: "assistant", active: true },
@@ -88,6 +89,7 @@ export async function POST(request: NextRequest) {
         // Use existing versionGroup or create one from the message id
         regenerateVersionGroup =
           lastAssistant.versionGroup ?? lastAssistant.id;
+        deactivatedMessageId = lastAssistant.id;
         await prisma.message.update({
           where: { id: lastAssistant.id },
           data: { active: false, versionGroup: regenerateVersionGroup },
@@ -144,10 +146,7 @@ export async function POST(request: NextRequest) {
     const activeMessages = chat.messages.filter((m) => m.active);
     // For regenerate: exclude the just-deactivated assistant message
     const filteredMessages = isRegenerate
-      ? activeMessages.filter(
-          (m) =>
-            !(m.role === "assistant" && m.versionGroup === regenerateVersionGroup)
-        )
+      ? activeMessages.filter((m) => m.id !== deactivatedMessageId)
       : activeMessages;
     const recentMessages = filteredMessages.slice(-50);
     for (const msg of recentMessages) {

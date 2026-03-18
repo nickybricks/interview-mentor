@@ -1029,6 +1029,7 @@ Each test records: whether the input was blocked by the regex filter, whether th
 - **Bug fix: Regenerate lost conversation context.** When clicking "Regenerate", the AI received an empty user message and stale conversation history, causing it to respond as if it hadn't seen the user's last message. Two root causes fixed:
   1. Messages were fetched from DB *before* the old assistant message was deleted, so stale history was sent to OpenAI.
   2. An empty string was appended as the "current user message" during regeneration (since `sanitizedContent` is `""` for regenerate requests). Now the last user message from the DB history is used directly.
+  > **Note:** A related stale-data bug in the `versionGroup`-based message filter was discovered and fixed in Session 18.
 
 - **Version navigation for regenerated messages (ChatGPT-style `< 1/2 >` arrows):**
   - **Database:** Added `versionGroup` (String?) and `active` (Boolean, default `true`) fields to the Message model. When regenerating, the old response is deactivated (not deleted) and both old and new share the same `versionGroup` ID.
@@ -1165,6 +1166,19 @@ Each test records: whether the input was blocked by the regex filter, whether th
 - **Modified files:**
   - `lib/prompts.ts` – Removed `A_minimal`, `B_detailed`, `C_socratic`, `D_strict` prompt bodies and `PROMPT_LABELS` export
   - `DOCUMENTATION.md` – Updated Section 6 prompt table to single-row (E only)
+
+### Session 18 (March 18, 2026) – Regenerate Answer Stale History Bug Fix
+
+**What was done:**
+
+- **Bug fix: Regenerated answers were influenced by the previous bot response.** When clicking "Regenerate", the old assistant message was still included in the conversation history sent to OpenAI, so the AI produced a response influenced by its own previous answer instead of generating a fresh one.
+
+- **Root cause:** In `POST /api/messages`, the chat messages are fetched from the database (line 63) *before* the old assistant message is deactivated (line 91). The in-memory `chat.messages` array still had `active: true` and `versionGroup: null` for the old message. The filter at line 146 tried to exclude it by matching `m.versionGroup === regenerateVersionGroup`, but on first-time regeneration the in-memory `versionGroup` was `null` while `regenerateVersionGroup` was set to the message ID — so the comparison always failed and the old response leaked into the history.
+
+- **Fix:** Instead of filtering by `versionGroup` (which is stale in memory), the deactivated message's ID is now tracked directly and filtered by exact ID match. This is deterministic and doesn't depend on whether the in-memory data reflects the DB update.
+
+- **Modified files:**
+  - `app/api/messages/route.ts` – Added `deactivatedMessageId` variable, stored the deactivated message's ID before DB update, replaced `versionGroup`-based filter with ID-based filter (`m.id !== deactivatedMessageId`)
 
 ### Session 17 (March 18, 2026) – Chat Input Performance Optimization
 
