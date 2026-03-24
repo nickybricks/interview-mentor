@@ -14,7 +14,15 @@ import {
   Search,
   Mic,
   Square,
+  Bot,
 } from "lucide-react";
+import { ToolCallCard, type ToolCallDisplay } from "@/components/tool-call-card";
+
+interface RAGSourceDisplay {
+  source: string;
+  similarity: number;
+  preview: string;
+}
 
 interface Message {
   id: string;
@@ -34,6 +42,8 @@ interface Message {
   versionGroup?: string | null;
   versionIndex?: number;
   versionTotal?: number;
+  sources?: RAGSourceDisplay[];
+  toolCalls?: ToolCallDisplay[];
 }
 
 interface ChatData {
@@ -73,6 +83,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
+  const [activeToolCalls, setActiveToolCalls] = useState<ToolCallDisplay[]>([]);
   const autoStartTriggered = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -124,6 +135,8 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     tokensPerSec?: number;
     durationMs?: number;
     version?: { versionGroup: string; versionIndex: number; versionTotal: number };
+    sources?: RAGSourceDisplay[];
+    toolCalls?: ToolCallDisplay[];
   }
 
   const streamResponse = useCallback(
@@ -132,6 +145,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
       const decoder = new TextDecoder();
       let fullContent = "";
       let meta: StreamMeta = {};
+      const collectedToolCalls: ToolCallDisplay[] = [];
 
       if (reader) {
         while (true) {
@@ -146,8 +160,26 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
             const jsonStr = line.slice(6);
             try {
               const data = JSON.parse(jsonStr);
+              if (data.toolCall) {
+                const tc = data.toolCall as ToolCallDisplay;
+                const existingIdx = collectedToolCalls.findIndex(
+                  (t) => t.name === tc.name
+                );
+                if (existingIdx >= 0) {
+                  collectedToolCalls[existingIdx] = tc;
+                } else {
+                  collectedToolCalls.push(tc);
+                }
+                setActiveToolCalls([...collectedToolCalls]);
+                continue;
+              }
+              if (data.sources) {
+                meta.sources = data.sources;
+                continue;
+              }
               if (data.done) {
                 meta = {
+                  ...meta,
                   messageId: data.messageId,
                   inputTokens: data.inputTokens,
                   outputTokens: data.outputTokens,
@@ -160,7 +192,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
                   durationMs: data.durationMs,
                   version: data.version,
                 };
-                break;
+                continue;
               }
               if (data.error) throw new Error(data.error);
               if (data.text) {
@@ -172,6 +204,10 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
             }
           }
         }
+      }
+
+      if (collectedToolCalls.length > 0) {
+        meta.toolCalls = collectedToolCalls;
       }
 
       return { content: fullContent, meta };
@@ -229,6 +265,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
               outputCost: meta.outputCost,
               tokensPerSec: meta.tokensPerSec,
               durationMs: meta.durationMs,
+              sources: meta.sources,
             },
           ]);
         }
@@ -307,6 +344,8 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
           outputCost: meta.outputCost,
           tokensPerSec: meta.tokensPerSec,
           durationMs: meta.durationMs,
+          sources: meta.sources,
+          toolCalls: meta.toolCalls,
         };
         setMessages((prev) => [...prev, assistantMessage]);
       }
@@ -327,6 +366,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     } finally {
       setStreaming(false);
       setStreamingContent("");
+      setActiveToolCalls([]);
       textareaRef.current?.focus();
     }
   };
@@ -379,6 +419,8 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
           versionGroup: meta.version?.versionGroup,
           versionIndex: meta.version?.versionIndex,
           versionTotal: meta.version?.versionTotal,
+          sources: meta.sources,
+          toolCalls: meta.toolCalls,
         };
         setMessages((prev) => [...prev, assistantMessage]);
       }
@@ -398,6 +440,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     } finally {
       setStreaming(false);
       setStreamingContent("");
+      setActiveToolCalls([]);
     }
   }, [streaming, chatId, streamResponse, t]);
 
@@ -633,9 +676,25 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
                     ? (dir) => switchVersion(msg.id, dir)
                     : undefined
                 }
+                sources={msg.sources}
+                toolCalls={msg.toolCalls}
               />
             );
           })}
+
+          {/* Active tool calls during streaming */}
+          {streaming && activeToolCalls.length > 0 && (
+            <div className="flex gap-3">
+              <div className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <Bot className="size-4" />
+              </div>
+              <div className="min-w-0 max-w-[85%] space-y-1.5">
+                {activeToolCalls.map((tc) => (
+                  <ToolCallCard key={tc.name} toolCall={tc} />
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Streaming message */}
           {streaming && streamingContent && (
@@ -647,7 +706,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
           )}
 
           {/* Loading indicator */}
-          {streaming && !streamingContent && (
+          {streaming && !streamingContent && activeToolCalls.length === 0 && (
             <div className="flex gap-3">
               <div className="flex size-8 items-center justify-center rounded-full bg-muted">
                 <Loader2 className="size-4 animate-spin text-muted-foreground" />

@@ -4,8 +4,7 @@ import {
   PROMPTS,
   DEFAULT_PROMPT,
 } from "./prompts";
-import fs from "fs/promises";
-import path from "path";
+import { prisma } from "./db";
 
 export type AIFeatureKey = "gap_analysis" | "preparation" | "mock_interview";
 
@@ -61,18 +60,18 @@ export function createDefaultSettings(): AISettings {
   };
 }
 
-const SETTINGS_PATH = path.join(process.cwd(), "ai-settings.json");
-
 export async function readSettings(): Promise<AISettings> {
   const defaults = createDefaultSettings();
   try {
-    const raw = await fs.readFile(SETTINGS_PATH, "utf-8");
-    const parsed = JSON.parse(raw);
-    // Deep merge each feature
+    const row = await prisma.aiSettings.findUnique({
+      where: { id: "singleton" },
+    });
+    if (!row) return defaults;
+    const parsed = row.settings as Record<string, unknown>;
     return {
-      gap_analysis: { ...defaults.gap_analysis, ...parsed.gap_analysis },
-      preparation: { ...defaults.preparation, ...parsed.preparation },
-      mock_interview: { ...defaults.mock_interview, ...parsed.mock_interview },
+      gap_analysis: { ...defaults.gap_analysis, ...(parsed.gap_analysis as Partial<AIFeatureSettings>) },
+      preparation: { ...defaults.preparation, ...(parsed.preparation as Partial<AIFeatureSettings>) },
+      mock_interview: { ...defaults.mock_interview, ...(parsed.mock_interview as Partial<AIFeatureSettings>) },
     };
   } catch {
     return defaults;
@@ -80,5 +79,9 @@ export async function readSettings(): Promise<AISettings> {
 }
 
 export async function writeSettings(settings: AISettings): Promise<void> {
-  await fs.writeFile(SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf-8");
+  await prisma.aiSettings.upsert({
+    where: { id: "singleton" },
+    update: { settings: JSON.parse(JSON.stringify(settings)) },
+    create: { id: "singleton", settings: JSON.parse(JSON.stringify(settings)) },
+  });
 }

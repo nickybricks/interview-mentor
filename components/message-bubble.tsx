@@ -1,6 +1,6 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Badge } from "@/components/ui/badge";
@@ -10,7 +10,15 @@ import {
   TooltipContent,
 } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
-import { User, Bot, Info, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+import { User, Bot, Info, RefreshCw, ChevronLeft, ChevronRight, FileText, ChevronDown, ChevronUp } from "lucide-react";
+import { useI18n } from "@/lib/i18n";
+import { ToolCallCard, type ToolCallDisplay } from "@/components/tool-call-card";
+
+interface RAGSourceDisplay {
+  source: string;
+  similarity: number;
+  preview: string;
+}
 
 interface MessageBubbleProps {
   role: "user" | "assistant";
@@ -31,6 +39,8 @@ interface MessageBubbleProps {
   versionIndex?: number;
   versionTotal?: number;
   onVersionChange?: (direction: "prev" | "next") => void;
+  sources?: RAGSourceDisplay[];
+  toolCalls?: ToolCallDisplay[];
 }
 
 function fmtNum(n: number): string {
@@ -65,7 +75,11 @@ export const MessageBubble = memo(function MessageBubble({
   versionIndex,
   versionTotal,
   onVersionChange,
+  sources,
+  toolCalls,
 }: MessageBubbleProps) {
+  const { t } = useI18n();
+  const [sourcesExpanded, setSourcesExpanded] = useState(false);
   const isUser = role === "user";
   const hasOutputTokens = outputTokens != null && outputTokens > 0;
   const hasInputTokens = inputTokens != null && inputTokens > 0;
@@ -136,6 +150,54 @@ export const MessageBubble = memo(function MessageBubble({
             </div>
           )}
         </div>
+
+        {/* Tool call result cards */}
+        {!isUser && toolCalls && toolCalls.length > 0 && (
+          <div className="mt-1.5 space-y-1.5">
+            {toolCalls.map((tc) => (
+              <ToolCallCard key={tc.name} toolCall={tc} />
+            ))}
+          </div>
+        )}
+
+        {/* Collapsible sources section */}
+        {!isUser && sources && sources.length > 0 && (
+          <div className="mt-1">
+            <button
+              onClick={() => setSourcesExpanded((prev) => !prev)}
+              className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground transition-colors hover:bg-muted-foreground/10"
+            >
+              <FileText className="size-3" />
+              <span>{t("sources.label")} ({sources.length})</span>
+              {sourcesExpanded ? (
+                <ChevronUp className="size-3" />
+              ) : (
+                <ChevronDown className="size-3" />
+              )}
+            </button>
+            {sourcesExpanded && (
+              <div className="mt-1 space-y-1.5 pl-1">
+                {sources.map((src, i) => (
+                  <div
+                    key={i}
+                    className="rounded-lg border bg-background p-2 text-[11px]"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <FileText className="size-3 shrink-0 text-muted-foreground" />
+                      <span className="font-medium truncate">{src.source}</span>
+                      <Badge variant="outline" className="ml-auto shrink-0 text-[9px] px-1 py-0">
+                        {Math.round(src.similarity * 100)}%
+                      </Badge>
+                    </div>
+                    <p className="mt-0.5 text-muted-foreground line-clamp-2">
+                      {src.preview}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Footer: timestamp + compact token info with tooltip */}
         <div

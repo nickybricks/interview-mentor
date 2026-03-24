@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { chat } from "@/lib/openai";
+import { chat } from "@/lib/langchain";
 import { readSettings, getDefaultSystemPrompt } from "@/lib/ai-settings";
 
 // POST /api/projects/[id]/gap-analysis — Regenerate gap analysis
@@ -94,7 +94,7 @@ async function runGapAnalysis(
     }
   );
 
-  let gapAnalysis = response.choices[0]?.message?.content;
+  let gapAnalysis = typeof response.content === "string" ? response.content : null;
   if (gapAnalysis) {
     // Post-process: convert bold-only lines to proper markdown headings
     // e.g. "**Some Header**" or "**Some Header:**" → "### Some Header"

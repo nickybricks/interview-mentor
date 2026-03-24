@@ -18,7 +18,8 @@ The AI coach uses a 50-question bank from the WHO interview method (Screening �
 |---|---|
 | **Next.js 16** (App Router) | Full-stack React framework (frontend + API routes) |
 | **TypeScript** | Type-safe JavaScript |
-| **Prisma 7** + SQLite | ORM + file-based database (LibSQL adapter) |
+| **Prisma 7** + Supabase PostgreSQL | ORM + cloud-hosted database with pgvector for RAG embeddings |
+| **LangChain** (`@langchain/openai`) | AI framework with tool calling support |
 | **OpenAI API** (gpt-4.1-mini default) | AI-powered coaching, gap analysis, transcription |
 | **Tailwind CSS v4** | Utility-first styling |
 | **shadcn/ui** (base-nova) | Pre-built UI components |
@@ -30,6 +31,8 @@ The AI coach uses a 50-question bank from the WHO interview method (Screening �
 - **Interview Preparation** — AI-coached practice with 5 prompt variants (A–E), score tracking, and spaced repetition
 - **Mock Interviews** — Simulated interview sessions (unlocked at score ≥ 7.0)
 - **AI Settings Panel** — Per-feature model selection, temperature, top-p, frequency penalty, editable system prompts
+- **RAG Knowledge Base** — 11 curated coaching documents (scoring rubrics, STAR method, earned secrets, coaching frameworks, drills) embedded via pgvector for context-aware responses
+- **Tool Calling** — LangChain tools for answer scoring (5-dimension rubric), weak area tracking, and knowledge base search
 - **Security Guards** — Defense-in-depth prompt injection protection (40+ regex patterns, obfuscation detection, base64 payload scanning, prompt-level LLM guardrail)
 - **Voice Input** — Speech-to-text via OpenAI Whisper for natural interview practice
 - **Multi-File Upload** — CV, job description, and additional documents (certificates, references, transcripts)
@@ -60,11 +63,14 @@ cp .env.example .env.local
 Create `.env.local` with:
 ```
 OPENAI_API_KEY=sk-your-key-here
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
 ```
 
 Create `.env` with:
 ```
-DATABASE_URL="file:./prisma/dev.db"
+DATABASE_URL="postgresql://..."    # Supabase pooled connection (port 6543)
+DIRECT_URL="postgresql://..."      # Supabase direct connection (port 5432)
 ```
 
 ```bash
@@ -98,7 +104,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Known Limitations & Future Work
 
-- **Vector DB for smarter question selection** — Replace linear question bank with semantic similarity search for more relevant follow-ups
+- **Smarter question selection** — Use RAG similarity search for more relevant follow-up question selection
 - **Mock interview prompt refinement** — Improve realism and difficulty scaling of mock interview sessions
 - **Voice input via Whisper API** — Currently implemented; future work includes real-time streaming transcription
 - **Version history on regenerate** — Currently supports version navigation; future work includes diff view between versions
@@ -109,4 +115,4 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Deployment Status
 
-**Not deployed — runs locally.** The app is fully functional in local development. Phase 6 (Polish + Deploy) has not been started. The primary focus was on completing all core features, security hardening, and prompt testing. Deployment requires environment variable configuration, database migration strategy for production, and potential switch from SQLite to PostgreSQL.
+**Not deployed — runs locally.** The app is fully functional in local development. Phase 6 (Polish + Deploy) has not been started. The primary focus was on completing all core features, security hardening, and prompt testing. Deployment requires environment variable configuration and production Vercel setup. Database is already on Supabase PostgreSQL (cloud-hosted).

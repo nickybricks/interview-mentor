@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { deleteProjectDocuments } from "@/lib/vectorstore";
 
 // GET /api/projects/[id] - Get a single project with chats
 export async function GET(
@@ -112,6 +113,8 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
+    // Explicitly clean up vector documents (cascade handles it too, but be explicit)
+    await deleteProjectDocuments(id);
     await prisma.project.delete({ where: { id } });
     return NextResponse.json({ success: true });
   } catch (error) {

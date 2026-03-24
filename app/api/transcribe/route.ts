@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import openai from "@/lib/openai";
+import { openaiClient as openai } from "@/lib/langchain";
 
 // POST /api/transcribe - Transcribe audio file using OpenAI Whisper
 export async function POST(request: NextRequest) {

@@ -5,6 +5,7 @@ import { prisma } from "@/lib/db";
 export async function GET() {
   try {
     const projects = await prisma.project.findMany({
+      where: { id: { not: "__knowledge_base__" } },
       orderBy: { createdAt: "desc" },
       include: {
         chats: {

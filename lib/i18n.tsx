@@ -137,6 +137,27 @@ const translations = {
     "fileUpload.uploading": "Wird hochgeladen...",
     "fileUpload.uploaded": "Hochgeladen — klicke zum Ersetzen",
     "fileUpload.dragDrop": "PDF hierher ziehen oder klicken",
+
+    // Sources (RAG)
+    "sources.label": "Quellen",
+
+    // Tool Calling
+    "tool.scoreAnswer": "Antwort bewerten",
+    "tool.getWeakAreas": "Schwachstellen abrufen",
+    "tool.searchKnowledge": "Wissensdatenbank durchsuchen",
+    "tool.overallScore": "Gesamtbewertung",
+    "tool.substance": "Substanz",
+    "tool.structure": "Struktur",
+    "tool.relevance": "Relevanz",
+    "tool.credibility": "Glaubwürdigkeit",
+    "tool.differentiation": "Differenzierung",
+    "tool.strengths": "Stärken",
+    "tool.weaknesses": "Schwächen",
+    "tool.suggestion": "Vorschlag",
+    "tool.rootCause": "Ursache",
+    "tool.noWeakAreas": "Keine Schwachstellen gefunden — gut gemacht!",
+    "tool.noResults": "Keine Ergebnisse gefunden.",
+    "tool.answers": "Antworten",
   },
   en: {
     // Sidebar
@@ -270,6 +291,27 @@ const translations = {
     "fileUpload.uploading": "Uploading...",
     "fileUpload.uploaded": "Uploaded — click to replace",
     "fileUpload.dragDrop": "Drag PDF here or click to upload",
+
+    // Sources (RAG)
+    "sources.label": "Sources",
+
+    // Tool Calling
+    "tool.scoreAnswer": "Scoring Answer",
+    "tool.getWeakAreas": "Retrieving Weak Areas",
+    "tool.searchKnowledge": "Searching Knowledge Base",
+    "tool.overallScore": "Overall Score",
+    "tool.substance": "Substance",
+    "tool.structure": "Structure",
+    "tool.relevance": "Relevance",
+    "tool.credibility": "Credibility",
+    "tool.differentiation": "Differentiation",
+    "tool.strengths": "Strengths",
+    "tool.weaknesses": "Weaknesses",
+    "tool.suggestion": "Suggestion",
+    "tool.rootCause": "Root cause",
+    "tool.noWeakAreas": "No weak areas found — great job!",
+    "tool.noResults": "No results found.",
+    "tool.answers": "answers",
   },
 } as const;
 

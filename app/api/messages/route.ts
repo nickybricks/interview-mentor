@@ -1,6 +1,11 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
-import openai from "@/lib/openai";
+import {
+  streamChat,
+  createBoundModel,
+  toLangChainMessages,
+  type ChatMessage,
+} from "@/lib/langchain";
 import {
   PROMPTS,
   DEFAULT_PROMPT,
@@ -15,6 +20,11 @@ import {
   validateMessageLength,
   sanitizeInput,
 } from "@/lib/security";
+import {
+  retrieveWithQueryTranslation,
+  type RAGSource,
+} from "@/lib/rag";
+import { interviewTools } from "@/lib/tools";
 
 // Model pricing rates (USD per 1M tokens) — update when OpenAI changes prices
 const MODEL_PRICING: Record<string, { input: number; output: number }> = {
@@ -133,13 +143,36 @@ export async function POST(request: NextRequest) {
       contextInfo += `\n\n## Target Job Description:\n${chat.project.jobDescription}`;
     }
 
-    const fullSystemPrompt = systemPrompt + contextInfo;
+    // RAG: Retrieve relevant context for preparation and mock_interview chats
+    const RAG_ENABLED_TYPES = ["preparation", "mock_interview"];
+    let ragSources: RAGSource[] = [];
+    let ragContext = "";
+    const userQuery = isAutoStart ? "" : isRegenerate ? "" : sanitizedContent;
 
-    // Build message history for OpenAI
-    const messageHistory: Array<{
-      role: "system" | "user" | "assistant";
-      content: string;
-    }> = [{ role: "system", content: fullSystemPrompt }];
+    if (RAG_ENABLED_TYPES.includes(chat.type) && userQuery) {
+      try {
+        const ragResult = await retrieveWithQueryTranslation(
+          chat.projectId,
+          userQuery,
+          featureKey,
+        );
+        ragSources = ragResult.sources;
+        ragContext = ragResult.context;
+      } catch (err) {
+        console.error("RAG retrieval failed (non-blocking):", err);
+      }
+    }
+
+    // Build full system prompt: base + CV/JD context + RAG context
+    let fullSystemPrompt = systemPrompt + contextInfo;
+    if (ragContext) {
+      fullSystemPrompt += `\n\n## Relevant Context\nThe following excerpts were retrieved from the knowledge base and uploaded documents. Use them to inform your response when relevant:\n\n${ragContext}`;
+    }
+
+    // Build message history for LangChain
+    const messageHistory: ChatMessage[] = [
+      { role: "system", content: fullSystemPrompt },
+    ];
 
     // Add previous messages (limit to last 50 for token management)
     // Filter out inactive versions so only the active conversation thread is sent
@@ -194,34 +227,17 @@ export async function POST(request: NextRequest) {
 
     const modelUsed = featureSettings.model;
 
-    // Models that only accept default values for certain params
-    const isRestricted = ["gpt-5-mini", "gpt-5-nano"].includes(modelUsed);
-    const noTemperature = isRestricted;
-    const noFreqPenalty = isRestricted;
-    const noTopP = isRestricted;
+    // Determine if tools should be available (only for preparation chats)
+    const TOOL_ENABLED_TYPES = ["preparation"];
+    const toolsEnabled = TOOL_ENABLED_TYPES.includes(chat.type) && !isAutoStart;
 
-    // Stream response from OpenAI using config settings
-    const stream = await openai.chat.completions.create({
+    const chatOptions = {
       model: modelUsed,
-      messages: messageHistory,
-      ...(!noTemperature &&
-        featureSettings.temperature != null && {
-          temperature: featureSettings.temperature,
-        }),
-      stream: true,
-      stream_options: { include_usage: true },
-      ...(featureSettings.maxTokens != null && {
-        max_tokens: featureSettings.maxTokens,
-      }),
-      ...(!noTopP &&
-        featureSettings.topP != null &&
-        featureSettings.topP !== 1 && { top_p: featureSettings.topP }),
-      ...(!noFreqPenalty &&
-        featureSettings.frequencyPenalty != null &&
-        featureSettings.frequencyPenalty !== 0 && {
-          frequency_penalty: featureSettings.frequencyPenalty,
-        }),
-    });
+      temperature: featureSettings.temperature,
+      maxTokens: featureSettings.maxTokens,
+      topP: featureSettings.topP,
+      frequencyPenalty: featureSettings.frequencyPenalty,
+    };
 
     // Create a readable stream for the response
     const encoder = new TextEncoder();
@@ -231,19 +247,123 @@ export async function POST(request: NextRequest) {
         let completionTokens = 0;
         let promptTokens = 0;
         const streamStartTime = Date.now();
+        // Collect tool call results for the frontend
+        const toolCallResults: { name: string; result: unknown }[] = [];
+
         try {
-          for await (const chunk of stream) {
-            const text = chunk.choices[0]?.delta?.content || "";
-            if (text) {
-              fullResponse += text;
-              controller.enqueue(
-                encoder.encode(`data: ${JSON.stringify({ text })}\n\n`)
-              );
+          if (toolsEnabled) {
+            // ─── Tool-calling path ──────────────────────────────────────
+            const boundModel = createBoundModel(interviewTools, chatOptions);
+            const lcMessages = toLangChainMessages(messageHistory);
+
+            // Tool execution loop: invoke → check for tool calls → execute → re-invoke
+            let maxIterations = 5;
+            while (maxIterations-- > 0) {
+              const response = await boundModel.invoke(lcMessages);
+
+              // Capture usage
+              if (response.usage_metadata) {
+                completionTokens += response.usage_metadata.output_tokens ?? 0;
+                promptTokens += response.usage_metadata.input_tokens ?? 0;
+              }
+
+              const toolCalls = response.tool_calls;
+              if (!toolCalls || toolCalls.length === 0) {
+                // No tool calls — stream the text content
+                const text = typeof response.content === "string" ? response.content : "";
+                if (text) {
+                  fullResponse = text;
+                  // Stream in chunks for a smoother UX
+                  const chunkSize = 20;
+                  for (let i = 0; i < text.length; i += chunkSize) {
+                    const chunk = text.slice(i, i + chunkSize);
+                    controller.enqueue(
+                      encoder.encode(`data: ${JSON.stringify({ text: chunk })}\n\n`)
+                    );
+                  }
+                }
+                break;
+              }
+
+              // Execute each tool call
+              lcMessages.push(response);
+              for (const tc of toolCalls) {
+                // Notify frontend that tool is running
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({ toolCall: { name: tc.name, status: "running" } })}\n\n`
+                  )
+                );
+
+                // Inject projectId and jobDescription where needed
+                const args = { ...tc.args };
+                if (tc.name === "get_weak_areas" && !args.projectId) {
+                  args.projectId = chat.projectId;
+                }
+                if (tc.name === "search_knowledge_base" && !args.projectId) {
+                  args.projectId = chat.projectId;
+                }
+                if (tc.name === "score_answer" && !args.jobDescription) {
+                  args.jobDescription = chat.project.jobDescription ?? "";
+                }
+
+                // Find and execute the tool
+                const toolDef = interviewTools.find((t) => t.name === tc.name);
+                let toolResult = "";
+                if (toolDef) {
+                  try {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    toolResult = await (toolDef as any).invoke(args);
+                  } catch (err) {
+                    console.error(`Tool ${tc.name} failed:`, err);
+                    toolResult = JSON.stringify({ error: `Tool ${tc.name} failed` });
+                  }
+                }
+
+                // Parse and track results for the frontend
+                let parsedResult: unknown;
+                try {
+                  parsedResult = JSON.parse(toolResult);
+                } catch {
+                  parsedResult = toolResult;
+                }
+                toolCallResults.push({ name: tc.name, result: parsedResult });
+
+                // Notify frontend that tool is done
+                controller.enqueue(
+                  encoder.encode(
+                    `data: ${JSON.stringify({ toolCall: { name: tc.name, status: "done", result: parsedResult } })}\n\n`
+                  )
+                );
+
+                // Add tool result as ToolMessage to conversation
+                const { ToolMessage } = await import("@langchain/core/messages");
+                lcMessages.push(
+                  new ToolMessage({
+                    content: toolResult,
+                    tool_call_id: tc.id ?? tc.name,
+                  })
+                );
+              }
+              // Loop back to get the LLM's final response incorporating tool results
             }
-            // Capture usage from the final chunk (stream_options: include_usage)
-            if (chunk.usage) {
-              completionTokens = chunk.usage.completion_tokens ?? 0;
-              promptTokens = chunk.usage.prompt_tokens ?? 0;
+          } else {
+            // ─── Standard streaming path (no tools) ─────────────────────
+            const stream = await streamChat(messageHistory, chatOptions);
+
+            for await (const chunk of stream) {
+              const text =
+                typeof chunk.content === "string" ? chunk.content : "";
+              if (text) {
+                fullResponse += text;
+                controller.enqueue(
+                  encoder.encode(`data: ${JSON.stringify({ text })}\n\n`)
+                );
+              }
+              if (chunk.usage_metadata) {
+                completionTokens = chunk.usage_metadata.output_tokens ?? 0;
+                promptTokens = chunk.usage_metadata.input_tokens ?? 0;
+              }
             }
           }
 
@@ -255,7 +375,7 @@ export async function POST(request: NextRequest) {
           const outputCost = (completionTokens * pricing.output) / 1_000_000;
           const totalCost = inputCost + outputCost;
 
-          // Save assistant message to DB
+          // Save assistant message to DB (include tool call results if any)
           const assistantMessage = await prisma.message.create({
             data: {
               chatId,
@@ -268,15 +388,41 @@ export async function POST(request: NextRequest) {
               ...(regenerateVersionGroup && {
                 versionGroup: regenerateVersionGroup,
               }),
+              ...(toolCallResults.length > 0 && {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                toolCalls: toolCallResults.map((tc) => ({
+                  name: tc.name,
+                  status: "done",
+                  result: tc.result,
+                })) as any,
+              }),
             },
           });
 
-          // Extract score if present (for preparation chats)
-          const scoreMatch = fullResponse.match(
-            /(?:\*\*)?Score:(?:\*\*)?\s*(\d+(?:\.\d+)?)\s*\/\s*10/
-          );
-          if (scoreMatch) {
-            const score = parseFloat(scoreMatch[1]);
+          // Extract score — prefer tool-based score, fallback to regex
+          let extractedScore: number | null = null;
+
+          // Check if score_answer tool was called
+          const scoreToolResult = toolCallResults.find((tc) => tc.name === "score_answer");
+          if (scoreToolResult && typeof scoreToolResult.result === "object" && scoreToolResult.result !== null) {
+            const result = scoreToolResult.result as { overallScore?: number };
+            if (result.overallScore != null) {
+              extractedScore = result.overallScore;
+            }
+          }
+
+          // Fallback: regex-based score extraction from response text
+          if (extractedScore == null) {
+            const scoreMatch = fullResponse.match(
+              /(?:\*\*)?Score:(?:\*\*)?\s*(\d+(?:\.\d+)?)\s*\/\s*10/
+            );
+            if (scoreMatch) {
+              extractedScore = parseFloat(scoreMatch[1]);
+            }
+          }
+
+          if (extractedScore != null) {
+            const score = extractedScore;
             // Update the user's last message with the score and flagged status
             const lastUserMessage = await prisma.message.findFirst({
               where: { chatId, role: "user" },
@@ -322,7 +468,7 @@ export async function POST(request: NextRequest) {
               data: { category: categoryMatch[1].trim() },
             });
             // Also store category on the user message for easier querying
-            if (scoreMatch) {
+            if (extractedScore != null) {
               const lastUserMessage = await prisma.message.findFirst({
                 where: { chatId, role: "user" },
                 orderBy: { createdAt: "desc" },
@@ -375,6 +521,22 @@ export async function POST(request: NextRequest) {
               })}\n\n`
             )
           );
+
+          // Send sources AFTER the done event
+          if (ragSources.length > 0) {
+            controller.enqueue(
+              encoder.encode(
+                `data: ${JSON.stringify({
+                  sources: ragSources.map((s) => ({
+                    source: s.source,
+                    similarity: Math.round(s.similarity * 1000) / 1000,
+                    preview: s.content.slice(0, 100),
+                  })),
+                })}\n\n`
+              )
+            );
+          }
+
           controller.close();
         } catch (error) {
           console.error("Streaming error:", error);

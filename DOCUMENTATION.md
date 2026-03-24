@@ -1,6 +1,6 @@
 # Interview Mentor – Code Documentation
 
-> Last updated: March 18, 2026 | Status: Phase 1 + 2 + 3 + 4 complete (Setup + Backend + Frontend + Features) | Phase 5 (Evaluation): prompt testing documented | Phase 6 (Deploy): not started
+> Last updated: March 21, 2026 | Status: Sprint 1 complete | Sprint 2 Phase 0 (Supabase + PostgreSQL migration) complete | Phase 1 (LangChain refactor) complete | Phase 2 (RAG ingestion) complete | Phase 3 (RAG retrieval + query translation) complete | Phase 4 (Tool Calling) complete
 
 ---
 
@@ -43,9 +43,10 @@ The user uploads their resume (PDF) and a job description. The bot analyzes both
 | **Language** | TypeScript | JavaScript with types = fewer bugs |
 | **Styling** | Tailwind CSS v4 | Utility-first CSS, fast to write |
 | **UI Components** | shadcn/ui | Pre-built, polished components (buttons, inputs, etc.) |
-| **Database** | SQLite + Prisma ORM | Simple file-based database, no server needed |
-| **DB Adapter** | LibSQL | Prisma v7 requires a driver adapter for SQLite |
-| **AI** | OpenAI API (gpt-4.1-mini) | Generates interview questions and feedback |
+| **Database** | Supabase PostgreSQL + Prisma ORM | Cloud-hosted PostgreSQL with pgvector for RAG embeddings |
+| **DB Adapter** | PrismaPg (`@prisma/adapter-pg`) | Prisma v7 driver adapter for PostgreSQL pooled connections |
+| **AI Framework** | LangChain (`@langchain/openai`, `@langchain/core/tools`) | Framework-agnostic AI layer with tool calling support wrapping OpenAI ChatGPT models |
+| **AI Model** | OpenAI gpt-4.1-mini (via LangChain) | Generates interview questions and feedback |
 | **PDF Parsing** | pdf-parse v2 | Extracts text from uploaded PDFs |
 
 ---
@@ -85,17 +86,34 @@ interview-mentor/
 │
 ├── lib/                        # ← Shared logic used across the app
 │   ├── db.ts                   #     Database connection (Prisma Client)
-│   ├── openai.ts               #     OpenAI Client + helper functions
-│   ├── prompts.ts              #     All system prompts (A–E + Gap + Mock)
+│   ├── langchain.ts             #     LangChain ChatOpenAI wrapper + helper functions
+│   ├── supabase.ts              #     Supabase client (service role key)
+│   ├── vectorstore.ts           #     RAG: chunk, embed, retrieve, delete (pgvector)
+│   ├── rag.ts                   #     RAG: multi-query retrieval with query translation
+│   ├── tools.ts                #     LangChain tool definitions (score_answer, get_weak_areas, search_knowledge_base)
+│   ├── prompts.ts              #     All system prompts (Marcus Webb v2 + Gap Analysis v2 + Mock)
 │   ├── security.ts             #     Input validation + security guards
 │   ├── i18n.tsx                 #     Internationalization (DE/EN) context + translations
 │   ├── utils.ts                #     Tailwind helper function (cn)
+│   ├── knowledge-base/          #     11 RAG knowledge base markdown files
+│   │   ├── rubrics-and-scoring.md          # 5-dimension scoring rubric
+│   │   ├── storybank-and-star-method.md    # STAR method guide
+│   │   ├── differentiation-and-earned-secrets.md # Earned secrets, spiky POVs
+│   │   ├── coaching-frameworks.md          # Gap-handling, signal-reading
+│   │   ├── story-mapping.md                # Portfolio-optimized story mapping
+│   │   ├── scoring-calibration.md          # Scoring drift detection
+│   │   ├── role-specific-drills.md         # PM, Engineering, Design drills
+│   │   ├── scored-examples.md              # Worked examples of scored answers
+│   │   ├── challenge-protocol.md           # Five-lens challenge framework
+│   │   ├── who-interview-method.md         # WHO 4-stage interview method (custom)
+│   │   └── interview-categories.md         # App's 5 interview categories (custom)
 │   └── generated/prisma/       #     Auto-generated Prisma Client (DO NOT edit!)
 │
 ├── components/                 # ← React components
 │   ├── sidebar.tsx             #     Sidebar: project list + chat navigation
 │   ├── chat-window.tsx         #     Chat UI: messages + input + streaming
 │   ├── message-bubble.tsx      #     Single message with markdown rendering (React.memo optimized)
+│   ├── tool-call-card.tsx      #     Tool call result UI (score dimensions, weak areas, knowledge search)
 │   ├── settings-panel.tsx      #     LLM settings: model, temperature, persona
 │   ├── file-upload.tsx         #     Drag & drop PDF upload
 │   ├── new-project-dialog.tsx  #     Dialog to create a new project
@@ -117,12 +135,14 @@ interview-mentor/
 │       └── label.tsx           #     Form labels
 │
 ├── prisma/
-│   ├── schema.prisma           #     Database schema (the "blueprints" for tables)
-│   ├── dev.db                  #     The actual SQLite database file
-│   └── migrations/             #     Migration history
+│   ├── schema.prisma           #     Database schema (6 models: Project, Document, Chat, Message, AiSettings, VectorDocument)
+│   └── migrations/             #     Migration history (init-postgresql)
 │
-├── .env.local                  #     OpenAI API Key (SECRET – never commit!)
-├── .env                        #     Database URL for Prisma CLI
+├── scripts/
+│   └── seed-knowledge-base.ts  #     Seed script: embeds knowledge base into pgvector
+│
+├── .env.local                  #     OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (SECRET – never commit!)
+├── .env                        #     DATABASE_URL (pooled, port 6543) + DIRECT_URL (direct, port 5432) for Prisma
 ├── prisma.config.ts            #     Prisma configuration
 ├── components.json             #     shadcn/ui configuration
 ├── tsconfig.json               #     TypeScript configuration
@@ -153,28 +173,38 @@ interview-mentor/
 │                                                              │
 │  app/api/messages/route.ts                                   │
 │    1. Validate message        (lib/security.ts)              │
-│    2. Save to database        (lib/db.ts → Prisma → SQLite)  │
+│    2. Save to database        (lib/db.ts → Prisma → PG)     │
 │    3. Load system prompt      (lib/prompts.ts)               │
-│    4. Fetch chat history from DB                             │
-│    5. Send to OpenAI          (lib/openai.ts)                │
-│    6. Stream response back to browser                        │
-│    7. Save AI response to DB                                 │
+│    4. RAG: multi-query retrieval (lib/rag.ts → vectorstore)  │
+│    5. Inject retrieved context into system prompt             │
+│    6. Fetch chat history from DB                             │
+│    7. Send to OpenAI          (lib/langchain.ts)             │
+│       7a. Tool calling path: bind tools → invoke → execute   │
+│           tools → feed results back → loop (max 5 iters)     │
+│    8. Stream response + tool calls + sources back to browser │
+│    9. Save AI response to DB                                 │
+│                                                              │
+│  app/api/upload/route.ts                                     │
+│    1. Parse PDF               (pdf-parse)                    │
+│    2. Save text to DB                                        │
+│    3. Chunk + embed into pgvector  (lib/vectorstore.ts)      │
 └──────────┬──────────────────────┬────────────────────────────┘
            │                      │
            ▼                      ▼
-┌──────────────────┐    ┌──────────────────┐
-│  SQLite (Prisma)  │    │  OpenAI API      │
-│  prisma/dev.db    │    │  gpt-4.1-mini    │
-│                   │    │                  │
-│  - Projects       │    │  Sends:          │
-│  - Chats          │    │  - System Prompt │
-│  - Messages       │    │  - Chat History  │
-└──────────────────┘    │  - User Message  │
-                        │                  │
-                        │  Receives:       │
-                        │  - AI Response   │
-                        │    (streamed)    │
-                        └──────────────────┘
+┌────────────────────────┐  ┌──────────────────┐
+│  Supabase PostgreSQL    │  │  OpenAI API      │
+│  (Prisma + PrismaPg)    │  │  via LangChain   │
+│                         │  │                  │
+│  - Projects             │  │  Chat:           │
+│  - Chats                │  │  - gpt-4.1-mini  │
+│  - Messages             │  │  - ChatOpenAI    │
+│  - Documents            │  │  - Streaming SSE │
+│  - AiSettings           │  │                  │
+│  - VectorDocument       │  │  Embeddings:     │
+│    (pgvector, 1536-dim) │  │  - text-embed-   │
+│    (1,079 KB chunks +   │  │    ing-3-small   │
+│     user doc chunks)    │  │                  │
+└────────────────────────┘  └──────────────────┘
 ```
 
 ### Data flow when sending a message (step by step):
@@ -185,12 +215,16 @@ interview-mentor/
 4. Backend saves the user message to the database
 5. Backend loads the matching system prompt (based on chat type)
 6. Backend appends CV + job description text to the prompt
-7. Backend fetches the last 50 messages from DB (chat history)
-8. Backend sends everything to the OpenAI API (with streaming enabled)
-9. OpenAI responds piece by piece (token by token)
-10. Backend forwards each piece immediately to the browser (SSE)
-11. When done: Backend saves the complete AI response to the DB
-12. Backend extracts the score and category from the response and stores them
+7. **RAG retrieval** (preparation + mock_interview only): generates 3 alternative query rephrasings via LLM, searches pgvector with all 4 queries, deduplicates, injects top-k chunks as "## Relevant Context" section in the system prompt
+8. Backend fetches the last 50 messages from DB (chat history)
+9. Backend sends everything to the OpenAI API:
+   - **Tool calling path** (preparation chats, non-autoStart): binds 3 LangChain tools to the model, invokes (non-streaming), checks for tool_calls in response, executes tools, feeds ToolMessage results back, loops until the model returns text (max 5 iterations). Sends SSE events for each tool call (running/done).
+   - **Streaming path** (all other chats): streams via `streamChat()` as before
+10. OpenAI responds piece by piece (token by token), or returns tool call requests
+11. Backend forwards each piece immediately to the browser (SSE), including `toolCall` events
+12. When done: Backend saves the complete AI response to the DB
+13. Backend extracts the score from tool-based `score_answer` result (preferred) or regex fallback, and stores it
+14. Backend sends a `sources` SSE event with retrieved chunk metadata (source filename, similarity score, preview)
 
 ---
 
@@ -312,17 +346,24 @@ export const prisma = new PrismaClient({ adapter });
 
 **Singleton pattern explained:** During development, Next.js restarts the server on every code change. Without a Singleton, we'd open a new database connection each time. With the Singleton, we store the connection in `globalThis` (= global memory) and reuse it.
 
-### `lib/openai.ts` – AI Integration
+### `lib/langchain.ts` – AI Integration (LangChain)
 
 ```typescript
-// Creates the OpenAI client with the API key from .env.local
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,  // Only available server-side!
-});
+// LangChain ChatOpenAI wrapper — replaces raw OpenAI SDK (Phase 1 refactor)
+import { ChatOpenAI } from "@langchain/openai";
 
-// Two functions:
-// streamChat() → Response arrives piece by piece (for the chat UI)
-// chat()       → Response arrives all at once (for analyses)
+// Creates a ChatOpenAI model instance with configurable parameters
+// Handles restricted models (gpt-5-mini/nano) that don't accept certain params
+
+// Three main functions:
+// streamChat() → Returns async iterable of AIMessageChunks (for the chat UI)
+//                Uses streamUsage: true to get token counts in final chunk
+// chat()       → Returns full AIMessage response (for analyses)
+// createBoundModel() → Creates a ChatOpenAI model with tools bound via .bindTools()
+//                      Used for the tool calling loop in preparation chats
+
+// Also exports raw OpenAI client for non-chat endpoints (Whisper transcription)
+// Also exports toLangChainMessages() for converting role/content objects
 ```
 
 **Important:** `process.env.OPENAI_API_KEY` only works in the backend (API routes). In the frontend (browser), the variable is invisible = the API key is safe.
@@ -333,15 +374,29 @@ All coaching styles are stored here. One active variant remains after A–D were
 
 | Prompt | Style | Technique | Description |
 |--------|-------|-----------|-------------|
-| **E** | **Marcus Webb — VP of Operations (DEFAULT)** | Few-shot + role prompting + structured output + question bank | Blunt, no-nonsense VP persona ("hired 200+ people") with 50-question WHO bank. Scores harder than other coaches — a 7 from Marcus is an 8 elsewhere. Flexible response format with optional "What the hiring manager is thinking" and "Challenge" elements. |
+| **E** (v2) | **Marcus Webb — VP of Operations (DEFAULT)** | Role prompting + structured coaching flow + 5-dimension scoring rubric + tool usage rules | Blunt, no-nonsense VP persona ("hired 200+ people") with structured onboarding (3 questions, one at a time), 5-dimension scoring (Substance/Structure/Relevance/Credibility/Differentiation, each 1-5, mapped to 1-10), feedback structure (What I Heard → Score → What's Working → Gap to Close → Next), coaching intelligence (weak area tracking, story excavation, candidate adaptation), tool usage rules for `score_answer`/`get_weak_areas`/`search_knowledge_base`, and 12 non-negotiable rules. |
 
-**Why is E the default?** It uses the "Marcus Webb" persona — a blunt VP of Operations who has hired 200+ people. Instead of a warm mentor, Marcus is direct, pushes back on weak answers, and scores harder than typical coaches. The prompt includes a 50-question bank from the WHO interview method (Screening → Topgrading → Focused → Reference), which Marcus adapts naturally to the candidate's CV and job description. The flexible response format ensures variety: only `Score: X/10` is mandatory, while elements like "What the hiring manager is thinking" and challenge pushbacks appear when they add value.
+**Why is E the default?** It uses the "Marcus Webb" persona — a blunt VP of Operations who has hired 200+ people. Instead of a warm mentor, Marcus is direct, pushes back on weak answers, and scores harder than typical coaches. The v2 prompt adds structured onboarding, a 5-dimension scoring rubric with anchors, coaching intelligence (pattern detection across conversations, story excavation techniques), and explicit tool usage rules to prevent over-eager tool invocation.
 
 **Prompt testing results** are documented in [docs/System_Prompt_Documentation.xlsx](docs/System_Prompt_Documentation.xlsx) (3 sheets: Gap Analysis with 20 tests, Interview Prep with 32 tests, Prompt Injection Tests with 18 tests).
 
 Additionally, there are:
-- `GAP_ANALYSIS_PROMPT` – For the CV vs. job description analysis
+- `GAP_ANALYSIS_PROMPT` (v2) – Coaching-ready gap analysis with 4-level fit scoring (Strong Fit → Workable → Stretch → Gap), seniority inference, Role Snapshot, Story Bank Candidates with excavation prompts, Dimension Risk Assessment, and Coaching Priority Plan ordered by interview impact
 - `MOCK_INTERVIEW_PROMPT` – For the simulated interview (no feedback during the session)
+
+### `lib/tools.ts` – LangChain Tool Definitions
+
+Defines 3 LangChain tools using `tool()` from `@langchain/core/tools` with Zod schemas:
+
+| Tool | What it does |
+|------|-------------|
+| `scoreAnswer` | Uses a dedicated LLM call (`gpt-4.1-mini`, temperature 0.2) to evaluate candidate answers across 5 dimensions (Substance, Structure, Relevance, Credibility, Differentiation — each 1-5). Returns `overallScore` (1-10), dimension breakdown, strengths, weaknesses, suggestion, and rootCause. |
+| `getWeakAreas` | Queries `prisma.message.findMany` for flagged messages grouped by category, returns average scores and sample questions for each weak area. |
+| `searchKnowledgeBase` | Calls `retrieveContext()` from vectorstore to search the RAG knowledge base, returns top 5 results with source, text, and similarity score. |
+
+Tool descriptions are carefully crafted to prevent over-eager use (e.g., "Do NOT use for greetings, follow-up questions, or general conversation").
+
+Exports `interviewTools` array with all 3 tools, used by `createBoundModel()` in `langchain.ts`.
 
 ### `lib/i18n.tsx` – Internationalization (DE/EN)
 
@@ -357,7 +412,7 @@ t("sidebar.newProject")  // → "Neue Bewerbung" (DE) or "New Application" (EN)
 **How it works:**
 1. `I18nProvider` wraps the app in `layout.tsx`, manages `locale` state
 2. Locale is persisted to `localStorage` under key `interview-mentor-locale`
-3. `t(key)` looks up translations from a typed `translations` object (~90 keys)
+3. `t(key)` looks up translations from a typed `translations` object (~108 keys)
 4. All components use `useI18n()` hook to access `t()` for UI text
 5. Language is switched via the profile menu in the sidebar (instant, no reload)
 
@@ -370,6 +425,33 @@ t("sidebar.newProject")  // → "Neue Bewerbung" (DE) or "New Application" (EN)
 | `validateMessageLength()` | Max 10,000 characters, must not be empty |
 | `sanitizeInput()` | Removes `<script>` tags, HTML, `javascript:`, event handlers |
 | `validateFileBuffer()` | Max 5MB, only PDFs allowed |
+
+### `lib/vectorstore.ts` – RAG Vector Store (pgvector)
+
+3 exported functions for managing document embeddings:
+
+| Function | What it does |
+|----------|-------------|
+| `addDocuments(projectId, text, source)` | Chunks text (500 chars, 50 overlap), embeds with `text-embedding-3-small`, inserts into `VectorDocument` via raw SQL |
+| `retrieveContext(projectId, query, k)` | Embeds query, runs cosine similarity search across project docs + `__knowledge_base__`, returns top-k chunks |
+| `deleteProjectDocuments(projectId)` | Deletes all vector documents for a project |
+
+### `lib/rag.ts` – RAG Retrieval with Query Translation
+
+Multi-query retrieval pipeline that improves search recall by generating alternative query rephrasings:
+
+| Function | What it does |
+|----------|-------------|
+| `retrieveWithQueryTranslation(projectId, query, featureKey, k)` | Generates 3 alternative queries via LLM, searches vector store with all 4 queries (original + 3 alternatives), deduplicates by content keeping highest similarity, returns top-k ranked chunks + sources + alternative queries |
+
+**How it works:**
+1. `generateAlternativeQueries()` calls the same model as the chat (from ai-settings) with `temperature: 0` and `maxTokens: 200` to produce 3 rephrasings
+2. All 4 queries (original + 3 alternatives) are searched in parallel via `retrieveContext()`
+3. Results are deduplicated by content — if the same chunk appears for multiple queries, the highest similarity score is kept
+4. Final results are sorted by similarity and truncated to top-k
+5. A formatted context string is built with `[Source N: filename]` headers for injection into the system prompt
+
+**Only active for:** `preparation` and `mock_interview` chat types (gap analysis uses the full document, not RAG)
 
 ---
 
@@ -428,11 +510,14 @@ export async function DELETE() { }  // → DELETE /api/...
 
 **Response:** Server-Sent Events (SSE) stream:
 ```
+data: {"toolCall": {"name": "score_answer", "status": "running"}}
+data: {"toolCall": {"name": "score_answer", "status": "done", "result": {...}}}
 data: {"text": "## "}
 data: {"text": "Coach's"}
 data: {"text": " Note\n"}
 ...
-data: {"done": true}
+data: {"done": true, "messageId": "...", "inputTokens": 1234, "outputTokens": 567, ...}
+data: {"sources": [{"source": "storybank-and-star-method.md", "similarity": 0.85, "preview": "The STAR method..."}]}
 ```
 
 #### Upload
@@ -491,7 +576,7 @@ export async function GET(
 .env.local          ← Only readable on the server
   OPENAI_API_KEY=sk-...
 
-lib/openai.ts       ← Reads process.env.OPENAI_API_KEY (server-side)
+lib/langchain.ts    ← Reads process.env.OPENAI_API_KEY (server-side)
 app/api/messages/   ← API route runs on the server
 
 Browser             ← Has NO access to the key!
@@ -693,7 +778,7 @@ Each test records: whether the input was blocked by the regex filter, whether th
 - Defined database schema (Project, Chat, Message) and ran migration
 - Created 4 lib files:
   - `db.ts` – Database connection with Singleton pattern
-  - `openai.ts` – OpenAI client with stream and chat functions
+  - `langchain.ts` – LangChain ChatOpenAI wrapper with stream and chat functions
   - `prompts.ts` – 5 coaching prompts + Gap Analysis + Mock Interview
   - `security.ts` – Input validation, XSS protection, prompt injection detection
 - Created 6 API routes:
@@ -1195,3 +1280,310 @@ Each test records: whether the input was blocked by the regex filter, whether th
 - **Modified files:**
   - `components/message-bubble.tsx` – Added `memo` import from React, wrapped `MessageBubble` export with `memo()`
   - `components/chat-window.tsx` – Wrapped `regenerateLastAnswer` with `useCallback` (deps: `streaming`, `chatId`, `streamResponse`, `t`), wrapped `switchVersion` with `useCallback` (no deps, uses only state setters)
+
+---
+
+## Sprint 2
+
+> Sprint 2 adds three core features: **RAG with pgvector**, **Tool Calling**, and **LangChain integration**. Deployment target: Vercel + Supabase.
+
+### Session 19 (March 20, 2026) – Sprint 2 Phase 0: Supabase Setup + PostgreSQL Migration
+
+**What was done:**
+
+- **Migrated database from SQLite to Supabase PostgreSQL.** The entire data layer was switched from a local SQLite file (`prisma/dev.db`) to a cloud-hosted Supabase PostgreSQL instance. This is required for Vercel deployment (serverless = no persistent filesystem) and for pgvector embeddings (RAG in Phase 2).
+
+- **Prisma schema updated:**
+  - `provider` changed from `"sqlite"` to `"postgresql"`
+  - Removed `url` and `directUrl` from the `datasource` block (Prisma 7 uses `prisma.config.ts` instead)
+  - Added `AiSettings` model — singleton row storing all AI settings as JSON, replacing the file-based `ai-settings.json`
+  - Added `VectorDocument` model — stores chunked document text with metadata, linked to Project via cascade delete. The `embedding vector(1536)` column is added via raw SQL since Prisma doesn't support pgvector types natively
+  - Added `vectorDocuments VectorDocument[]` relation to the `Project` model
+
+- **Created `prisma.config.ts`:**
+  - Uses `DIRECT_URL` (port 5432, direct connection) for migrations
+  - Falls back to `DATABASE_URL` if `DIRECT_URL` is not set
+  - Loads dotenv for environment variable access
+
+- **Replaced LibSQL adapter with PrismaPg adapter in `lib/db.ts`:**
+  - Removed `@prisma/adapter-libsql` and `@libsql/client` packages
+  - Installed `@prisma/adapter-pg` — the PostgreSQL driver adapter required by Prisma 7
+  - `PrismaClient` is now instantiated with `new PrismaPg({ connectionString })` adapter using the pooled `DATABASE_URL` (port 6543)
+  - Singleton pattern preserved for dev environment hot-reload safety
+
+- **Migrated AI settings from file to database (`lib/ai-settings.ts`):**
+  - `readSettings()` now queries `prisma.aiSettings.findUnique({ where: { id: "singleton" } })` and merges with defaults
+  - `writeSettings()` now uses `prisma.aiSettings.upsert()` — creates the singleton row on first save, updates on subsequent saves
+  - Removed all `fs.readFileSync` / `fs.writeFileSync` calls
+  - `ai-settings.json` file is no longer used
+
+- **Enabled pgvector extension in Supabase:**
+  - Ran `CREATE EXTENSION IF NOT EXISTS vector;` in Supabase SQL Editor
+  - Added `embedding vector(1536)` column to `VectorDocument` table via raw SQL
+  - Created `ivfflat` index for cosine similarity search: `CREATE INDEX ON "VectorDocument" USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);`
+
+- **Ran fresh PostgreSQL migration:**
+  - Removed old SQLite migration files (incompatible with PostgreSQL)
+  - Ran `npx prisma migrate dev --name init-postgresql` — created all 6 tables in Supabase
+  - Verified tables via Supabase Dashboard Table Editor
+
+- **Environment variables configured:**
+  - `.env`: `DATABASE_URL` (Supabase pooled connection, port 6543) + `DIRECT_URL` (direct connection, port 5432)
+  - `.env.local`: Added `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` for future Supabase client usage (Phase 2 RAG)
+
+- **Fixed Turbopack workspace root issue:**
+  - A stray `/Users/bricks/package-lock.json` caused Turbopack to infer the wrong workspace root, breaking CSS module resolution for Tailwind in dev mode
+  - Added `turbopack: { root: import.meta.dirname }` to `next.config.ts` as a safeguard
+
+- **Build verified successfully** — `npm run build` passes with zero errors
+
+**Key architectural decisions:**
+
+1. **Prisma 7 requires driver adapters** — no direct `url` in schema. Connection URLs go in `prisma.config.ts` for migrations and `PrismaPg` adapter for runtime.
+2. **Vector column via raw SQL** — Prisma doesn't support pgvector types. The `VectorDocument` model holds text fields; the `embedding` column is added separately.
+3. **AI settings singleton pattern** — Single row with `id: "singleton"` and `settings: Json` column. Uses `upsert()` for writes, `findUnique()` for reads, with `createDefaultSettings()` as fallback.
+4. **Pooled vs direct connections** — `DATABASE_URL` (port 6543, pooled) for app runtime on Vercel. `DIRECT_URL` (port 5432, direct) for Prisma migrations only.
+
+**Packages changed:**
+- Removed: `@prisma/adapter-libsql`, `@libsql/client`
+- Added: `@prisma/adapter-pg`
+
+**Modified files:**
+- `prisma/schema.prisma` – SQLite → PostgreSQL, added `AiSettings` + `VectorDocument` models
+- `prisma.config.ts` – New file, uses `DIRECT_URL` for migrations
+- `lib/db.ts` – LibSQL adapter → PrismaPg adapter
+- `lib/ai-settings.ts` – File-based read/write → Prisma database read/write
+- `.env` – `DATABASE_URL` + `DIRECT_URL` (Supabase connection strings)
+- `.env.local` – Added `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- `next.config.ts` – Added `turbopack.root`
+- `package.json` – Removed libsql deps, added `@prisma/adapter-pg`
+
+**Known issues:**
+- Turbopack CSS resolution logs warnings about `tailwindcss` in dev console — cosmetic only, CSS loads correctly and production build passes
+
+**What's next:** Phase 1 — LangChain Refactor (replace raw OpenAI SDK with LangChain `ChatOpenAI`)
+
+### Session 20 (March 20, 2026) – Sprint 2 Phase 1: LangChain Refactor
+
+**What was done:**
+
+- **Replaced raw OpenAI SDK with LangChain `ChatOpenAI`.** The entire AI layer now uses LangChain's abstraction instead of calling `openai.chat.completions.create()` directly. This makes the AI layer framework-agnostic and prepares for Phase 2 (RAG with pgvector, Tool Calling).
+
+- **Created `lib/langchain.ts`** (replaces `lib/openai.ts`):
+  - `ChatOpenAI` from `@langchain/openai` as the primary model class
+  - `createModel()` factory builds a `ChatOpenAI` instance with configurable params (temperature, maxTokens, topP, frequencyPenalty) — handles restricted models (gpt-5-mini/nano) by skipping unsupported params
+  - `streamChat()` returns an async iterable of `AIMessageChunk` with `streamUsage: true` for token counts
+  - `chat()` returns a full `AIMessage` via `model.invoke()`
+  - `toLangChainMessages()` converts `{role, content}` objects to LangChain message types (`SystemMessage`, `HumanMessage`, `AIMessage`)
+  - Raw `openaiClient` still exported for Whisper transcription (LangChain doesn't wrap non-chat endpoints)
+
+- **Updated `app/api/messages/route.ts`:**
+  - Imports `streamChat` + `ChatMessage` from `@/lib/langchain`
+  - Streaming now iterates `AIMessageChunk` objects: `chunk.content` for text, `chunk.usage_metadata` for token counts (`input_tokens`, `output_tokens`)
+  - Removed manual restricted-model parameter logic (now handled in `createModel()`)
+  - SSE format, cost calculation, DB persistence unchanged
+
+- **Updated `app/api/projects/[id]/gap-analysis/route.ts`:**
+  - Imports `chat` from `@/lib/langchain`
+  - Response extraction: `response.content` instead of `response.choices[0]?.message?.content`
+
+- **Updated `app/api/transcribe/route.ts`:**
+  - Imports `openaiClient` from `@/lib/langchain` (Whisper API unchanged)
+
+- **Deleted `lib/openai.ts`** — fully replaced by `lib/langchain.ts`
+
+**Key architectural decisions:**
+
+1. **LangChain as abstraction layer** — All AI calls go through LangChain. This enables future model swaps (local models, Anthropic, etc.) and LangChain-native features (RAG chains, tool calling, agents) without rewriting API routes.
+2. **Raw OpenAI client kept for Whisper** — LangChain doesn't wrap audio/transcription endpoints, so the raw `openai` package is still a dependency for `POST /api/transcribe`.
+3. **`streamUsage: true` for token tracking** — LangChain passes this to the OpenAI SDK's `stream_options: { include_usage: true }`, so token counts arrive in the final chunk's `usage_metadata`.
+
+**Packages changed:**
+- Added: `langchain`, `@langchain/openai`, `@langchain/core`
+- Kept: `openai` (still needed for Whisper transcription)
+
+**Modified files:**
+- `lib/langchain.ts` – New file, LangChain ChatOpenAI wrapper
+- `lib/openai.ts` – Deleted (replaced by `langchain.ts`)
+- `app/api/messages/route.ts` – LangChain streaming
+- `app/api/projects/[id]/gap-analysis/route.ts` – LangChain invoke
+- `app/api/transcribe/route.ts` – Import path change
+
+**What's next:** Phase 2 — RAG with pgvector (document chunking, embeddings, semantic search via LangChain retrievers)
+
+### Session 21 (March 20, 2026) – Sprint 2 Phase 2: RAG Pipeline — Ingestion with Supabase pgvector
+
+**What was done:**
+
+- **Created `lib/vectorstore.ts`** — core RAG ingestion and retrieval module:
+  - `addDocuments(projectId, text, source)` — chunks text with `RecursiveCharacterTextSplitter` (chunkSize: 500, overlap: 50), embeds with OpenAI `text-embedding-3-small` (1536 dimensions), inserts into `VectorDocument` table via raw SQL with `::vector` cast
+  - `retrieveContext(projectId, query, k)` — embeds query, runs cosine similarity search (`1 - (embedding <=> query::vector)`) filtered by `projectId` OR `__knowledge_base__`, returns top-k chunks with source and similarity score
+  - `deleteProjectDocuments(projectId)` — deletes all vector document rows for a project via Prisma `deleteMany`
+
+- **Created `lib/supabase.ts`** — Supabase client initialized with `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from environment variables
+
+- **Created `lib/knowledge-base/` directory** with 11 markdown files:
+  - 9 files adapted from `github.com/noamseg/interview-coach-skill` `references/` directory (MIT-licensed interview coaching content), cleaned to remove tool-specific workflow references (coaching_state.md, Interview Loops, command workflows) while preserving domain knowledge
+  - 2 custom files written from scratch:
+    - `who-interview-method.md` — WHO 4-stage interview method (Screening → Topgrading → Focused → Reference)
+    - `interview-categories.md` — the app's 5 interview categories (Experience, Problem-Solving, Leadership, Technical, Motivation)
+  - File mapping follows the sprint plan: source files renamed to descriptive target names (e.g., `rubrics-detailed.md` → `rubrics-and-scoring.md`)
+  - 8 command workflow files removed (coaching-kickoff, interview-prep-workflow, transcript-analysis, transcript-analysis-workflow, practice-drills-workflow, mock-interview-workflow, storybank-workflow, jd-decoding) — these described /kickoff, /prep, /analyze, /practice, /mock, /stories, /decode commands for the interview-coach-skill tool and polluted RAG retrieval
+
+- **Created `scripts/seed-knowledge-base.ts`** — idempotent seed script:
+  - Creates a sentinel `__knowledge_base__` Project row (required by VectorDocument foreign key)
+  - Reads all `.md` files from `lib/knowledge-base/`, chunks with `RecursiveCharacterTextSplitter`, embeds with `OpenAIEmbeddings`, inserts via raw SQL
+  - Loads both `.env` and `.env.local` via dotenv
+  - Successfully embedded chunks from 11 files
+  - Run via: `npx tsx scripts/seed-knowledge-base.ts`
+
+- **Updated `app/api/upload/route.ts`:**
+  - After PDF text extraction, calls `addDocuments(projectId, text, fileName)` for all upload types (CV, job description, additional documents)
+  - Response now includes `chunksEmbedded` count
+
+- **Updated `app/api/projects/[id]/route.ts` DELETE handler:**
+  - Calls `deleteProjectDocuments(id)` before deleting the project (explicit cleanup in addition to cascade)
+
+- **Updated `app/api/projects/route.ts` GET handler:**
+  - Filters out the `__knowledge_base__` sentinel project from the listing (`where: { id: { not: "__knowledge_base__" } }`)
+
+- **Verified retrieval works** — test query "How should I structure my STAR answer?" returned relevant chunks from `scoring-calibration.md`, `storybank-and-star-method.md`, and `rubrics-and-scoring.md`
+
+**Key architectural decisions:**
+
+1. **Raw SQL for vector operations** — Prisma doesn't support pgvector types natively. All embedding inserts and similarity searches use `$executeRawUnsafe` / `$queryRawUnsafe` with `::vector` casts.
+2. **Sentinel project for knowledge base** — The `__knowledge_base__` project ID satisfies the `VectorDocument.projectId` foreign key constraint. This row is hidden from the UI via the projects API filter.
+3. **Dual-scope retrieval** — `retrieveContext()` always searches both the user's project documents AND the shared knowledge base, ensuring every query can draw from both user-uploaded content and the static coaching material.
+4. **Chunking parameters** — 500 tokens per chunk with 50-token overlap balances granularity (specific enough for precise retrieval) with context (enough text to be useful).
+
+**Packages changed:**
+- Added: `@supabase/supabase-js`, `@langchain/textsplitters`
+
+**Modified files:**
+- `lib/vectorstore.ts` – New file, RAG ingestion + retrieval
+- `lib/supabase.ts` – New file, Supabase client
+- `lib/knowledge-base/*.md` – New directory, 11 knowledge base files
+- `scripts/seed-knowledge-base.ts` – New file, knowledge base seeding script
+- `app/api/upload/route.ts` – Added embedding after PDF upload
+- `app/api/projects/[id]/route.ts` – Added explicit vector cleanup on project deletion
+- `app/api/projects/route.ts` – Hidden sentinel project from listing
+- `package.json` – Added `@supabase/supabase-js`, `@langchain/textsplitters`
+
+**What's next:** Phase 3 — RAG Retrieval + Query Translation (multi-query retrieval, inject context into chat, display sources in UI)
+
+### Session 22 (March 20, 2026) – Sprint 2 Phase 3: RAG Pipeline — Retrieval + Query Translation
+
+**What was done:**
+
+- **Created `lib/rag.ts`** — multi-query retrieval with query translation:
+  - `generateAlternativeQueries(query, featureKey)` — uses the same model as the chat feature (from ai-settings) with `temperature: 0` and `maxTokens: 200` to generate 3 alternative rephrasings of the user query
+  - `retrieveWithQueryTranslation(projectId, query, featureKey, k)` — orchestrates the full pipeline: generates 3 alternative queries, searches vector store with all 4 queries in parallel, deduplicates results by content (keeping highest similarity), ranks and returns top-k chunks with sources and alternative queries
+  - Returns `RAGResult` type: `{ context: string, sources: RAGSource[], alternativeQueries: string[] }`
+
+- **Updated `app/api/messages/route.ts`:**
+  - Added RAG retrieval before LLM call — only for `preparation` and `mock_interview` chat types (gap analysis skips RAG)
+  - RAG is skipped for autoStart and regenerate modes (no user query to search)
+  - Injects retrieved chunks into the system prompt as `## Relevant Context` section (after CV/JD context, before chat history)
+  - RAG failure is non-blocking — logs error and continues without context
+  - Sends a `sources` SSE event AFTER the `done` event with source metadata: `{ source: string, similarity: number, preview: string }[]`
+
+- **Updated `components/chat-window.tsx`:**
+  - Added `RAGSourceDisplay` interface and `sources` field to `Message` interface
+  - Extended `StreamMeta` to include `sources` array
+  - Updated `streamResponse` to parse the `sources` SSE event (comes after `done`)
+  - Changed `done` event handling from `break` to `continue` so the stream reader processes the subsequent `sources` event
+  - Passes `sources` to `MessageBubble` in all three message creation points (autoStart, sendMessage, regenerate)
+
+- **Updated `components/message-bubble.tsx`:**
+  - Added collapsible "Sources" section below AI messages
+  - Toggle button shows source count with expand/collapse chevron icons
+  - Each source displays: file icon, source filename (truncated), similarity percentage badge, and 2-line content preview
+  - Uses `useState` for expand/collapse state, `useI18n` for localized label
+
+- **Added i18n keys:**
+  - `sources.label`: "Quellen" (DE) / "Sources" (EN)
+
+**Key architectural decisions:**
+
+1. **Non-blocking RAG** — If vector retrieval fails (e.g., no embeddings exist yet), the chat continues without context rather than erroring out. This ensures graceful degradation.
+2. **Parallel multi-query search** — All 4 queries (original + 3 alternatives) are searched via `Promise.all()` for maximum speed.
+3. **Content-based deduplication** — When the same chunk matches multiple query variants, only the highest similarity score is kept, preventing duplicate context in the prompt.
+4. **Sources sent after done** — The `sources` SSE event is sent after the `done` event to avoid blocking the streaming response. The frontend continues reading the stream after `done` to capture sources.
+
+**Modified files:**
+- `lib/rag.ts` – New file, multi-query RAG retrieval with query translation
+- `app/api/messages/route.ts` – Added RAG integration + sources SSE event
+- `components/chat-window.tsx` – Parse sources SSE event, pass to message bubbles
+- `components/message-bubble.tsx` – Collapsible sources display section
+- `lib/i18n.tsx` – Added `sources.label` key (DE/EN)
+
+**What's next:** Phase 4 — Tool Calling (score_answer, get_weak_areas, search_knowledge_base)
+
+### Session 23 (March 21, 2026) – Sprint 2 Phase 4: Tool Calling + Prompt v2
+
+**What was done:**
+
+- **Created `lib/tools.ts`** — 3 LangChain tools using `tool()` from `@langchain/core/tools` with Zod schemas:
+  - `scoreAnswer` — dedicated LLM call (`gpt-4.1-mini`, temperature 0.2) evaluates answers across 5 dimensions (Substance, Structure, Relevance, Credibility, Differentiation — each 1-5). Returns `overallScore` (1-10), dimension breakdown, strengths/weaknesses, suggestion, rootCause.
+  - `getWeakAreas` — queries `prisma.message.findMany` for flagged messages grouped by category, returns avg scores and sample questions.
+  - `searchKnowledgeBase` — calls `retrieveContext()` from vectorstore, returns top 5 results with source, text, and similarity score.
+  - Tool descriptions carefully crafted to prevent over-eager invocation.
+
+- **Created `components/tool-call-card.tsx`** — React component for displaying tool results:
+  - `ScoreCard` — overall score badge + 5 dimension progress bars (`DimensionBar`) + strengths/weaknesses lists + suggestion + root cause
+  - `WeakAreasCard` — categories with avg scores and answer counts
+  - `KnowledgeCard` — search results with source name, similarity %, and text preview
+  - `ToolCallCard` — container with icon, label, loading/done indicator, renders appropriate sub-card
+
+- **Updated `lib/langchain.ts`:**
+  - Added `StructuredToolInterface` import from `@langchain/core/tools`
+  - Added `createBoundModel(tools, options)` — creates a `ChatOpenAI` model with tools bound via `.bindTools()`
+  - Exported `toLangChainMessages` for use in the tool calling path
+
+- **Updated `app/api/messages/route.ts`** — major changes for tool calling:
+  - Tool-calling path for `preparation` chats (non-autoStart): uses `createBoundModel()` → invoke → check `response.tool_calls` → execute each tool → send ToolMessage back → loop (max 5 iterations)
+  - Auto-injects `projectId` and `jobDescription` into tool args when missing
+  - SSE events: `{ toolCall: { name, status: "running" } }` and `{ toolCall: { name, status: "done", result } }`
+  - Score extraction prefers tool-based `overallScore` from `score_answer` result, falls back to regex
+  - Final text response chunked into 20-char segments for smoother streaming appearance
+
+- **Updated `components/chat-window.tsx`:**
+  - Added `activeToolCalls` state and `ToolCallDisplay` import
+  - `streamResponse` callback handles `toolCall` SSE events, accumulates in `collectedToolCalls` array
+  - Active tool calls rendered during streaming (before streaming message bubble) with Bot avatar
+  - Loading indicator only shows when `activeToolCalls.length === 0`
+  - `activeToolCalls` cleared in `finally` blocks
+
+- **Updated `components/message-bubble.tsx`:**
+  - Added `toolCalls` prop to `MessageBubbleProps`
+  - Renders `ToolCallCard` components between message content and sources section
+
+- **Updated `lib/prompts.ts`** — two major prompt updates:
+  - **Marcus Webb v2 (`E_structured_output`)**: Structured onboarding (3 questions one at a time), 5-dimension scoring rubric with scoring anchors (1-5), feedback structure (What I Heard → Score → What's Working → Gap to Close → Next), coaching intelligence (weak area tracking, story excavation, candidate adaptation), explicit tool usage rules, 12 non-negotiable rules
+  - **Gap Analysis v2 (`GAP_ANALYSIS_PROMPT`)**: 4-level fit scoring (Strong Fit → Workable → Stretch → Gap), seniority inference, Role Snapshot section, Story Bank Candidates with excavation prompts, Dimension Risk Assessment table, Coaching Priority Plan ordered by interview impact, structured Overall Assessment
+
+- **Updated `lib/i18n.tsx`** — 18 new translation keys (DE + EN):
+  - Tool labels: `tool.scoreAnswer`, `tool.getWeakAreas`, `tool.searchKnowledge`
+  - Score dimensions: `tool.overallScore`, `tool.substance`, `tool.structure`, `tool.relevance`, `tool.credibility`, `tool.differentiation`
+  - Feedback: `tool.strengths`, `tool.weaknesses`, `tool.suggestion`, `tool.rootCause`
+  - Status: `tool.noWeakAreas`, `tool.noResults`, `tool.answers`
+
+**Key architectural decisions:**
+
+1. **Tool calling uses non-streaming invoke** — Tool calling requires inspecting the full response for `tool_calls` before deciding to execute tools or return text. The final text response is chunked into 20-char segments for smooth streaming appearance.
+2. **Max 5 tool iterations** — Prevents infinite loops if the model keeps requesting tool calls. In practice, 1-2 iterations are typical.
+3. **Score extraction priority** — Tool-based scores from `score_answer` are preferred over regex-based extraction, maintaining backward compatibility with the existing scoring system.
+4. **Context auto-injection** — `projectId` and `jobDescription` are automatically injected into tool args when the LLM doesn't provide them, since these are available from the chat context.
+5. **TypeScript workaround** — `(toolDef as any).invoke(args)` used to work around union type incompatibility across tools with different Zod schemas.
+
+**Modified files:**
+- `lib/tools.ts` – New file, 3 LangChain tool definitions
+- `components/tool-call-card.tsx` – New file, tool result display UI
+- `lib/langchain.ts` – Added `createBoundModel()`, exported `toLangChainMessages`
+- `app/api/messages/route.ts` – Tool calling loop, SSE tool events, score extraction priority
+- `components/chat-window.tsx` – Tool call state management, SSE event handling
+- `components/message-bubble.tsx` – Tool call cards in message bubbles
+- `lib/prompts.ts` – Marcus Webb v2 + Gap Analysis v2
+- `lib/i18n.tsx` – 18 new translation keys
+
+**What's next:** Phase 4b — Tool Calling Evaluation (test tool accuracy, scoring calibration)
