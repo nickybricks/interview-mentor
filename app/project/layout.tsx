@@ -89,11 +89,12 @@ export default function ProjectLayout({
             <Button
               variant="ghost"
               size="icon"
+              aria-label="Open menu"
               className="fixed top-3 left-3 z-40 md:hidden"
             />
           }
         >
-          <Menu className="size-5" />
+          <Menu className="size-5" aria-hidden="true" />
         </SheetTrigger>
         <SheetContent side="left" className="w-72 p-0">
           <Sidebar projects={projects} onProjectsChange={fetchProjects} />
@@ -107,20 +108,22 @@ export default function ProjectLayout({
           <Button
             variant="ghost"
             size="icon"
+            aria-label="Expand sidebar"
             className="absolute top-3 left-3 z-30 hidden md:flex"
             onClick={() => setSidebarCollapsed(false)}
           >
-            <PanelLeft className="size-5" />
+            <PanelLeft className="size-5" aria-hidden="true" />
           </Button>
         )}
         {/* Settings toggle button */}
         <Button
           variant="ghost"
           size="icon"
+          aria-label="Toggle settings"
           className="absolute top-3 right-3 z-30"
           onClick={() => setSettingsOpen((prev) => !prev)}
         >
-          <Settings2 className="size-5" />
+          <Settings2 className="size-5" aria-hidden="true" />
         </Button>
         {children}
       </main>

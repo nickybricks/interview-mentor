@@ -220,9 +220,10 @@ export default function ProjectPage() {
             <div className="grid gap-3 sm:grid-cols-3">
               {/* Gap Analysis */}
               <button
+                type="button"
                 onClick={() => startChat("gap_analysis")}
                 disabled={!project.cvText || !project.jobDescription}
-                className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <Search className="size-8 text-amber-600" />
                 <span className="font-medium">{t("chatType.gap_analysis")}</span>
@@ -235,8 +236,9 @@ export default function ProjectPage() {
 
               {/* Preparation */}
               <button
+                type="button"
                 onClick={() => startChat("preparation")}
-                className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50"
+                className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <GraduationCap className="size-8 text-blue-600" />
                 <span className="font-medium">{t("chatType.preparation")}</span>
@@ -247,9 +249,10 @@ export default function ProjectPage() {
 
               {/* Mock Interview */}
               <button
+                type="button"
                 onClick={() => startChat("mock_interview")}
                 disabled={!mockUnlocked}
-                className="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+                className="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <Mic className="size-8 text-emerald-600" />
                 <span className="font-medium">{t("chatType.mock_interview")}</span>
@@ -271,24 +274,29 @@ export default function ProjectPage() {
         {/* Gap Analysis Result */}
         {project.gapAnalysis && !gapLoading && (
           <Card>
-            <CardHeader
-              className="cursor-pointer select-none"
-              onClick={() => setGapOpen((o) => !o)}
-            >
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2 text-lg">
-                  <Search className="size-5 text-amber-600" />
-                  {t("project.gapTitle")}
-                </CardTitle>
-                <ChevronDown
-                  className={`size-5 text-muted-foreground transition-transform duration-300 ${
-                    gapOpen ? "rotate-180" : ""
-                  }`}
-                />
-              </div>
-              <CardDescription className="mt-1.5">
-                {t("project.gapAutoDesc")}
-              </CardDescription>
+            <CardHeader className="p-0">
+              <button
+                type="button"
+                onClick={() => setGapOpen((o) => !o)}
+                aria-expanded={gapOpen}
+                className="flex w-full cursor-pointer select-none flex-col gap-1.5 p-6 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset rounded-t-lg"
+              >
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <Search className="size-5 text-amber-600" aria-hidden="true" />
+                    {t("project.gapTitle")}
+                  </CardTitle>
+                  <ChevronDown
+                    aria-hidden="true"
+                    className={`size-5 text-muted-foreground transition-transform duration-300 ${
+                      gapOpen ? "rotate-180" : ""
+                    }`}
+                  />
+                </div>
+                <CardDescription className="mt-0">
+                  {t("project.gapAutoDesc")}
+                </CardDescription>
+              </button>
             </CardHeader>
             <div
               className="grid transition-[grid-template-rows] duration-300 ease-in-out"
@@ -326,7 +334,7 @@ export default function ProjectPage() {
                   <div className="mb-1 text-sm font-medium">{t("project.overallScore")}</div>
                   <div className="h-2 w-full rounded-full bg-muted">
                     <div
-                      className={`h-2 rounded-full transition-all ${
+                      className={`h-2 rounded-full transition-[width] duration-300 ${
                         score >= 7
                           ? "bg-emerald-500"
                           : score >= 5
@@ -348,7 +356,7 @@ export default function ProjectPage() {
                       <span className="w-40 truncate">{cat.name}</span>
                       <div className="h-1.5 flex-1 rounded-full bg-muted">
                         <div
-                          className={`h-1.5 rounded-full transition-all ${
+                          className={`h-1.5 rounded-full transition-[width] duration-300 ${
                             cat.avg >= 7
                               ? "bg-emerald-500"
                               : cat.avg >= 5

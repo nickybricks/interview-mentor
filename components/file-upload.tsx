@@ -82,7 +82,8 @@ export function FileUpload({
   const showSuccess = hasFile || success;
 
   return (
-    <div
+    <button
+      type="button"
       onDragOver={(e) => {
         e.preventDefault();
         setIsDragging(true);
@@ -90,7 +91,7 @@ export function FileUpload({
       onDragLeave={() => setIsDragging(false)}
       onDrop={handleDrop}
       onClick={() => inputRef.current?.click()}
-      className={`relative flex cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors ${
+      className={`relative flex w-full cursor-pointer flex-col items-center gap-2 rounded-lg border-2 border-dashed px-4 py-6 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 ${
         isDragging
           ? "border-primary bg-primary/5"
           : showSuccess
@@ -102,6 +103,8 @@ export function FileUpload({
         ref={inputRef}
         type="file"
         accept=".pdf"
+        name="fileUpload"
+        aria-label={label}
         onChange={handleChange}
         className="hidden"
       />
@@ -131,6 +134,6 @@ export function FileUpload({
           {error}
         </div>
       )}
-    </div>
+    </button>
   );
 }

@@ -88,6 +88,8 @@ export function NewProjectDialog({
             <Label htmlFor="name">{t("newProject.nameLabel")}</Label>
             <Input
               id="name"
+              name="projectName"
+              autoComplete="off"
               placeholder={t("newProject.namePlaceholder")}
               value={name}
               onChange={(e) => setName(e.target.value)}
@@ -98,6 +100,8 @@ export function NewProjectDialog({
             <Label htmlFor="company">{t("newProject.companyLabel")}</Label>
             <Input
               id="company"
+              name="company"
+              autoComplete="organization"
               placeholder={t("newProject.companyPlaceholder")}
               value={company}
               onChange={(e) => setCompany(e.target.value)}
@@ -107,6 +111,8 @@ export function NewProjectDialog({
             <Label htmlFor="position">{t("newProject.positionLabel")}</Label>
             <Input
               id="position"
+              name="position"
+              autoComplete="organization-title"
               placeholder={t("newProject.positionPlaceholder")}
               value={position}
               onChange={(e) => setPosition(e.target.value)}

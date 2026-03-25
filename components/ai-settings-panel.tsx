@@ -182,10 +182,11 @@ export function AISettingsPanel({ onClose, defaultFeature }: AISettingsPanelProp
         <Button
           variant="ghost"
           size="icon"
+          aria-label="Close settings"
           onClick={onClose}
           className="size-7"
         >
-          <X className="size-4" />
+          <X className="size-4" aria-hidden="true" />
         </Button>
       </div>
 
@@ -241,6 +242,9 @@ export function AISettingsPanel({ onClose, defaultFeature }: AISettingsPanelProp
                 {/* Fixed-height textarea with scroll */}
                 <div className="relative">
                   <Textarea
+                    name="systemPrompt"
+                    autoComplete="off"
+                    spellCheck={false}
                     value={effectivePrompt}
                     onChange={(e) =>
                       updateDraft({ systemPrompt: e.target.value })
@@ -253,7 +257,7 @@ export function AISettingsPanel({ onClose, defaultFeature }: AISettingsPanelProp
                     size="icon"
                     className="absolute right-1.5 bottom-1.5 size-6 opacity-60 hover:opacity-100"
                     onClick={() => setPromptDialogOpen(true)}
-                    title={t("aiSettings.expandPrompt")}
+                    aria-label={t("aiSettings.expandPrompt")}
                   >
                     <Maximize2 className="size-3.5" />
                   </Button>
@@ -337,6 +341,8 @@ export function AISettingsPanel({ onClose, defaultFeature }: AISettingsPanelProp
                   <Label className="text-xs">{t("aiSettings.maxTokens")}</Label>
                   <Input
                     type="number"
+                    name="maxTokens"
+                    autoComplete="off"
                     value={draft.maxTokens ?? ""}
                     placeholder={t("aiSettings.unlimited")}
                     onChange={(e) =>

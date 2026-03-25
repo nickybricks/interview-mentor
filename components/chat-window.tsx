@@ -724,12 +724,14 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
           <div className="flex items-end gap-2 rounded-2xl border bg-background p-2 shadow-lg">
             <Textarea
               ref={textareaRef}
+              name="message"
+              autoComplete="off"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
               placeholder={t("chat.placeholder")}
               disabled={streaming || recording}
-              className="min-h-[44px] max-h-[200px] resize-none border-0 shadow-none focus-visible:ring-0"
+              className="min-h-[44px] max-h-[200px] resize-none border-0 shadow-none focus-visible:ring-0 focus-visible:border-primary"
               rows={1}
             />
             {/* Voice recording button */}
@@ -742,7 +744,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
                 "shrink-0 rounded-xl",
                 recording && "animate-pulse"
               )}
-              title={recording ? t("chat.stopRecording") : t("chat.voiceInput")}
+              aria-label={recording ? t("chat.stopRecording") : t("chat.voiceInput")}
             >
               {transcribing ? (
                 <Loader2 className="size-4 animate-spin" />
@@ -757,6 +759,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
               onClick={sendMessage}
               disabled={!input.trim() || streaming}
               size="icon"
+              aria-label="Send message"
               className="shrink-0 rounded-xl"
             >
               {streaming ? (
@@ -766,9 +769,9 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
               )}
             </Button>
           </div>
-          <p className="mt-1 text-center text-[10px] text-muted-foreground">
+          <p className="mt-1 text-center text-[10px] text-muted-foreground" aria-live="polite">
             {micError ? (
-              <span className="text-destructive">{micError}</span>
+              <span className="text-destructive" role="alert">{micError}</span>
             ) : recording ? (
               <span className="text-destructive">{t("chat.recordingActive")}</span>
             ) : (

@@ -10,6 +10,8 @@ export const translations = {
     "sidebar.createFirst": "Erstelle dein erstes!",
     "sidebar.deleteProject": "Projekt löschen",
     "sidebar.deleteChat": "Chat löschen",
+    "sidebar.confirmDeleteProject": "Möchtest du dieses Projekt wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
+    "sidebar.confirmDeleteChat": "Möchtest du diesen Chat wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
     "sidebar.noChats": "Keine Chats",
 
     // Chat types
@@ -127,6 +129,7 @@ export const translations = {
     "docs.attach": "Datei hinzufügen",
     "docs.attachHint": "z.B. Arbeitszeugnisse, Zertifikate, Schulzeugnisse (PDF, max. 5 MB)",
     "docs.startGapAnalysis": "Gap-Analyse starten",
+    "docs.confirmDelete": "Möchtest du dieses Dokument wirklich löschen?",
 
     // File Upload
     "fileUpload.pdfOnly": "Nur PDF-Dateien sind erlaubt",
@@ -188,6 +191,8 @@ export const translations = {
     "sidebar.createFirst": "Create your first one!",
     "sidebar.deleteProject": "Delete project",
     "sidebar.deleteChat": "Delete chat",
+    "sidebar.confirmDeleteProject": "Are you sure you want to delete this project? This action cannot be undone.",
+    "sidebar.confirmDeleteChat": "Are you sure you want to delete this chat? This action cannot be undone.",
     "sidebar.noChats": "No chats",
 
     // Chat types
@@ -305,6 +310,7 @@ export const translations = {
     "docs.attach": "Attach file",
     "docs.attachHint": "e.g. boss reviews, course certificates, school certificates (PDF, max. 5 MB)",
     "docs.startGapAnalysis": "Start Gap Analysis",
+    "docs.confirmDelete": "Are you sure you want to delete this document?",
 
     // File Upload
     "fileUpload.pdfOnly": "Only PDF files are allowed",

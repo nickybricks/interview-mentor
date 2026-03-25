@@ -74,7 +74,7 @@ function DimensionBar({
       <span className="w-28 shrink-0 text-muted-foreground">{label}</span>
       <div className="h-1.5 flex-1 rounded-full bg-muted">
         <div
-          className={`h-1.5 rounded-full ${color} transition-all`}
+          className={`h-1.5 rounded-full ${color} transition-[width] duration-300`}
           style={{ width: `${pct}%` }}
         />
       </div>

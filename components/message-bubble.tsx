@@ -43,12 +43,17 @@ interface MessageBubbleProps {
   toolCalls?: ToolCallDisplay[];
 }
 
-function fmtNum(n: number): string {
-  return n.toLocaleString("en-US");
+function fmtNum(n: number, locale: string): string {
+  return new Intl.NumberFormat(locale).format(n);
 }
 
-function fmtCost(cost: number): string {
-  return `$${cost.toFixed(4)}`;
+function fmtCost(cost: number, locale: string): string {
+  return new Intl.NumberFormat(locale, {
+    style: "currency",
+    currency: "USD",
+    minimumFractionDigits: 4,
+    maximumFractionDigits: 4,
+  }).format(cost);
 }
 
 function fmtDuration(ms: number): string {
@@ -78,7 +83,7 @@ export const MessageBubble = memo(function MessageBubble({
   sources,
   toolCalls,
 }: MessageBubbleProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [sourcesExpanded, setSourcesExpanded] = useState(false);
   const isUser = role === "user";
   const hasOutputTokens = outputTokens != null && outputTokens > 0;
@@ -207,16 +212,16 @@ export const MessageBubble = memo(function MessageBubble({
         >
           {createdAt && (
             <span>
-              {new Date(createdAt).toLocaleTimeString("de-DE", {
+              {new Intl.DateTimeFormat(locale, {
                 hour: "2-digit",
                 minute: "2-digit",
-              })}
+              }).format(new Date(createdAt))}
             </span>
           )}
 
           {/* User messages: just show estimated tokens */}
           {isUser && hasOutputTokens && (
-            <span>~{fmtNum(outputTokens!)} tokens</span>
+            <span>~{fmtNum(outputTokens!, locale)} tokens</span>
           )}
 
           {/* Regenerate button for last assistant message */}
@@ -226,7 +231,7 @@ export const MessageBubble = memo(function MessageBubble({
               size="icon"
               className="size-5 rounded"
               onClick={onRegenerate}
-              title="Regenerate"
+              aria-label="Regenerate response"
             >
               <RefreshCw className="size-2.5" />
             </Button>
@@ -265,9 +270,9 @@ export const MessageBubble = memo(function MessageBubble({
               <TooltipTrigger
                 className="inline-flex cursor-default items-center gap-1 rounded px-1 py-0.5 transition-colors hover:bg-muted-foreground/10"
               >
-                <span>{fmtNum(totalTokens)} tokens</span>
+                <span>{fmtNum(totalTokens, locale)} tokens</span>
                 <span className="mx-0.5">·</span>
-                <span>{fmtCost(totalCost ?? 0)}</span>
+                <span>{fmtCost(totalCost ?? 0, locale)}</span>
                 <Info className="ml-0.5 size-2.5 opacity-50" />
               </TooltipTrigger>
               <TooltipContent
@@ -288,10 +293,10 @@ export const MessageBubble = memo(function MessageBubble({
                     <>
                       <span className="text-background/60">Input</span>
                       <span>
-                        {fmtNum(inputTokens!)} tokens
+                        {fmtNum(inputTokens!, locale)} tokens
                         {inputCost != null && (
                           <span className="ml-1 text-background/60">
-                            ({fmtCost(inputCost)})
+                            ({fmtCost(inputCost, locale)})
                           </span>
                         )}
                       </span>
@@ -301,10 +306,10 @@ export const MessageBubble = memo(function MessageBubble({
                     <>
                       <span className="text-background/60">Output</span>
                       <span>
-                        {fmtNum(outputTokens!)} tokens
+                        {fmtNum(outputTokens!, locale)} tokens
                         {outputCost != null && (
                           <span className="ml-1 text-background/60">
-                            ({fmtCost(outputCost)})
+                            ({fmtCost(outputCost, locale)})
                           </span>
                         )}
                       </span>
@@ -314,7 +319,7 @@ export const MessageBubble = memo(function MessageBubble({
                   <>
                     <span className="text-background/60">Total</span>
                     <span className="font-medium">
-                      {fmtNum(totalTokens)} tokens · {fmtCost(totalCost ?? 0)}
+                      {fmtNum(totalTokens, locale)} tokens · {fmtCost(totalCost ?? 0, locale)}
                     </span>
                   </>
                   {/* Speed */}

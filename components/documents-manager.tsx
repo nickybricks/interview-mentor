@@ -111,6 +111,7 @@ export function DocumentsManager({
   };
 
   const handleDelete = async (docId: string) => {
+    if (!window.confirm(t("docs.confirmDelete"))) return;
     setDeletingId(docId);
     try {
       const res = await fetch(`/api/documents/${docId}`, {
@@ -150,7 +151,7 @@ export function DocumentsManager({
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger
             render={
-              <button className="flex w-full items-center gap-3 rounded-lg border border-dashed p-3 text-left transition-colors hover:border-primary/50 hover:bg-muted/50" />
+              <button className="flex w-full items-center gap-3 rounded-lg border border-dashed p-3 text-left transition-colors hover:border-primary/50 hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
             }
           >
             <FileText className="size-5 shrink-0 text-muted-foreground" />
@@ -273,7 +274,8 @@ export function DocumentsManager({
                   <button
                     onClick={() => handleDelete(doc.id)}
                     disabled={deletingId === doc.id}
-                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                    aria-label={`Remove ${doc.name}`}
+                    className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     {deletingId === doc.id ? (
                       <Loader2 className="size-4 animate-spin" />
@@ -295,9 +297,10 @@ export function DocumentsManager({
 
             {/* Attach button */}
             <button
+              type="button"
               onClick={() => additionalInputRef.current?.click()}
               disabled={uploading}
-              className="flex w-full items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/50 hover:text-foreground disabled:opacity-50"
+              className="flex w-full items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground transition-colors hover:border-primary/50 hover:bg-muted/50 hover:text-foreground disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               {uploadingType === "additional" ? (
                 <Loader2 className="size-4 animate-spin" />

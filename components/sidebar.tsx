@@ -77,6 +77,9 @@ export function Sidebar({ projects, onProjectsChange, onCollapse }: SidebarProps
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(
     new Set()
   );
+  const [manuallyCollapsed, setManuallyCollapsed] = useState<Set<string>>(
+    new Set()
+  );
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // Auto-expand active project
@@ -84,21 +87,30 @@ export function Sidebar({ projects, onProjectsChange, onCollapse }: SidebarProps
   const activeChatId = pathname.match(/\/chat\/([^/]+)/)?.[1];
 
   const toggleProject = (id: string) => {
-    setExpandedProjects((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
+    if (isProjectExpanded(id)) {
+      // Collapse: remove from expanded, add to manually collapsed
+      setExpandedProjects((prev) => {
+        const next = new Set(prev);
         next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+        return next;
+      });
+      setManuallyCollapsed((prev) => new Set(prev).add(id));
+    } else {
+      // Expand: add to expanded, remove from manually collapsed
+      setExpandedProjects((prev) => new Set(prev).add(id));
+      setManuallyCollapsed((prev) => {
+        const next = new Set(prev);
+        next.delete(id);
+        return next;
+      });
+    }
   };
 
   const isProjectExpanded = (id: string) =>
-    expandedProjects.has(id) || id === activeProjectId;
+    expandedProjects.has(id) || (id === activeProjectId && !manuallyCollapsed.has(id));
 
   const deleteProject = async (id: string) => {
+    if (!window.confirm(t("sidebar.confirmDeleteProject"))) return;
     try {
       const res = await fetch(`/api/projects/${id}`, { method: "DELETE" });
       if (res.ok) {
@@ -115,6 +127,7 @@ export function Sidebar({ projects, onProjectsChange, onCollapse }: SidebarProps
   const deleteChat = async (chatId: string, e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    if (!window.confirm(t("sidebar.confirmDeleteChat"))) return;
     try {
       const res = await fetch(`/api/chats/${chatId}`, { method: "DELETE" });
       if (res.ok) {
@@ -142,9 +155,10 @@ export function Sidebar({ projects, onProjectsChange, onCollapse }: SidebarProps
         {onCollapse && (
           <button
             onClick={onCollapse}
-            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label="Collapse sidebar"
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <PanelLeftClose className="size-4" />
+            <PanelLeftClose className="size-4" aria-hidden="true" />
           </button>
         )}
       </div>
@@ -187,7 +201,8 @@ export function Sidebar({ projects, onProjectsChange, onCollapse }: SidebarProps
               >
                 <button
                   onClick={() => toggleProject(project.id)}
-                  className="flex items-center p-1.5"
+                  aria-label={isProjectExpanded(project.id) ? "Collapse project" : "Expand project"}
+                  className="flex items-center p-1.5 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <ChevronRight
                     className={`size-3.5 text-muted-foreground transition-transform ${
@@ -216,7 +231,7 @@ export function Sidebar({ projects, onProjectsChange, onCollapse }: SidebarProps
                       />
                     }
                   >
-                    <MoreHorizontal className="size-3.5" />
+                    <MoreHorizontal className="size-3.5" aria-hidden="true" />
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
@@ -285,7 +300,7 @@ export function Sidebar({ projects, onProjectsChange, onCollapse }: SidebarProps
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
-              <button className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-sidebar-accent/50 transition-colors" />
+              <button className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-sm hover:bg-sidebar-accent/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" />
             }
           >
             <div className="flex size-8 items-center justify-center rounded-full bg-primary text-primary-foreground">

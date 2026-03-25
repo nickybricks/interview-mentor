@@ -42,6 +42,7 @@ The AI coach uses a 50-question bank from the WHO interview method (Screening �
 - **Markdown Export** — Download full project data (gap analysis, scores, chat transcripts) as `.md`
 - **Collapsible Sidebar** — Desktop sidebar toggle, mobile Sheet overlay
 - **Responsive Design** — Full mobile support with adaptive layouts
+- **Accessibility** — aria-labels on all icon buttons, focus-visible states, semantic HTML, aria-live regions for async updates, confirmation dialogs for destructive actions, locale-aware number/currency/date formatting via `Intl.*`
 
 ## Architecture
 
