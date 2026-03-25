@@ -25,16 +25,7 @@ import {
   type RAGSource,
 } from "@/lib/rag";
 import { interviewTools } from "@/lib/tools";
-
-// Model pricing rates (USD per 1M tokens) — update when OpenAI changes prices
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-  "gpt-5-mini": { input: 0.25, output: 2.0 },
-  "gpt-5-nano": { input: 0.05, output: 0.4 },
-  "gpt-4.1-mini": { input: 0.4, output: 1.6 },
-  "gpt-4.1-nano": { input: 0.1, output: 0.4 },
-  "gpt-4o-mini": { input: 0.15, output: 0.6 },
-  "codex-mini-latest": { input: 0.75, output: 3.0 },
-};
+import { getModelPricing } from "@/lib/model-pricing";
 
 // POST /api/messages - Send a message and get AI response (streaming)
 export async function POST(request: NextRequest) {
@@ -369,8 +360,8 @@ export async function POST(request: NextRequest) {
 
           const durationMs = Date.now() - streamStartTime;
 
-          // Calculate cost breakdown using model pricing constants
-          const pricing = MODEL_PRICING[modelUsed] ?? MODEL_PRICING["gpt-4.1-mini"];
+          // Calculate cost breakdown using dynamic model pricing
+          const pricing = await getModelPricing(modelUsed);
           const inputCost = (promptTokens * pricing.input) / 1_000_000;
           const outputCost = (completionTokens * pricing.output) / 1_000_000;
           const totalCost = inputCost + outputCost;

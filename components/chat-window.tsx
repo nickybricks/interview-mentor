@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -73,7 +73,7 @@ interface ChatWindowProps {
 const AUTO_START_TYPES = ["preparation", "mock_interview"];
 
 export function ChatWindow({ chatId }: ChatWindowProps) {
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [chat, setChat] = useState<ChatData | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -112,15 +112,15 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
   }, [chatId]);
 
   // Auto-scroll to bottom
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = () => {
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, []);
+  };
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamingContent, scrollToBottom]);
+  }, [messages, streamingContent]);
 
   // Shared streaming helper — reads SSE response and updates state
   interface StreamMeta {
@@ -139,8 +139,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     toolCalls?: ToolCallDisplay[];
   }
 
-  const streamResponse = useCallback(
-    async (res: Response): Promise<{ content: string; meta: StreamMeta }> => {
+  const streamResponse = async (res: Response): Promise<{ content: string; meta: StreamMeta }> => {
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
       let fullContent = "";
@@ -211,9 +210,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
       }
 
       return { content: fullContent, meta };
-    },
-    []
-  );
+  };
 
   // Auto-start: bot sends intro for new empty chats
   useEffect(() => {
@@ -288,7 +285,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     };
 
     triggerIntro();
-  }, [chat, loading, streaming, messages.length, chatId, streamResponse, t]);
+  }, [chat, loading, streaming, messages.length, chatId, t]);
 
   // Send message with streaming
   const sendMessage = async () => {
@@ -372,7 +369,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
   };
 
   // Regenerate the last assistant answer
-  const regenerateLastAnswer = useCallback(async () => {
+  const regenerateLastAnswer = async () => {
     if (streaming) return;
 
     // Remove the last assistant message from UI
@@ -442,10 +439,10 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
       setStreamingContent("");
       setActiveToolCalls([]);
     }
-  }, [streaming, chatId, streamResponse, t]);
+  };
 
   // Switch version of a message (prev/next)
-  const switchVersion = useCallback(async (
+  const switchVersion = async (
     messageId: string,
     direction: "prev" | "next"
   ) => {
@@ -487,7 +484,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     } catch (err) {
       console.error("Version switch failed:", err);
     }
-  }, []);
+  };
 
   // Handle Enter to send
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -498,7 +495,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
   };
 
   // Voice recording: toggle start/stop
-  const toggleRecording = useCallback(async () => {
+  const toggleRecording = async () => {
     if (recording) {
       mediaRecorderRef.current?.stop();
       return;
@@ -540,7 +537,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
           const formData = new FormData();
           formData.append("audio", file);
 
-          const res = await fetch("/api/transcribe", {
+          const res = await fetch(`/api/transcribe?locale=${locale}`, {
             method: "POST",
             body: formData,
           });
@@ -575,7 +572,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
       setMicError(t("chat.micDenied"));
       setTimeout(() => setMicError(null), 5000);
     }
-  }, [recording, t]);
+  };
 
   // Cleanup: release microphone if component unmounts while recording
   useEffect(() => {

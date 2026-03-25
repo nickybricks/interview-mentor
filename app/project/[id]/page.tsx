@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -55,13 +55,13 @@ interface ProjectDetail {
 export default function ProjectPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
-  const { t } = useI18n();
+  const { t, locale } = useI18n();
   const [project, setProject] = useState<ProjectDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [gapLoading, setGapLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  const fetchProject = useCallback(async () => {
+  const fetchProject = async () => {
     try {
       const res = await fetch(`/api/projects/${params.id}`);
       if (res.ok) {
@@ -72,11 +72,11 @@ export default function ProjectPage() {
     } finally {
       setLoading(false);
     }
-  }, [params.id]);
+  };
 
   useEffect(() => {
     fetchProject();
-  }, [fetchProject]);
+  }, [params.id]);
 
   // Poll for gap analysis result when it's being generated
   useEffect(() => {
@@ -94,31 +94,32 @@ export default function ProjectPage() {
     return () => clearInterval(interval);
   }, [gapLoading, params.id]);
 
-  const handleFileUploaded = useCallback(async () => {
+  const handleFileUploaded = async () => {
     const res = await fetch(`/api/projects/${params.id}`);
     if (res.ok) {
       const updated = await res.json();
       setProject(updated);
     }
-  }, [params.id]);
+  };
 
-  const handleStartGapAnalysis = useCallback(async () => {
+  const handleStartGapAnalysis = async () => {
     if (!project?.cvText || !project?.jobDescription) return;
     setGapLoading(true);
     try {
       await fetch(`/api/projects/${params.id}/gap-analysis`, {
         method: "POST",
+        headers: { "x-locale": locale },
       });
     } catch (err) {
       console.error("Failed to start gap analysis:", err);
       setGapLoading(false);
     }
-  }, [params.id, project?.cvText, project?.jobDescription]);
+  };
 
   const handleExport = async () => {
     setExporting(true);
     try {
-      const res = await fetch(`/api/projects/${params.id}/export`);
+      const res = await fetch(`/api/projects/${params.id}/export?locale=${locale}`);
       if (res.ok) {
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);

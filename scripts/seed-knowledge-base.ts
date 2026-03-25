@@ -38,15 +38,22 @@ async function main() {
     where: { projectId: KNOWLEDGE_BASE_PROJECT_ID },
   });
 
-  if (existing > 0) {
+  const forceReseed = process.argv.includes("--force");
+
+  if (existing > 0 && !forceReseed) {
     console.log(
-      `Knowledge base already seeded (${existing} chunks). To re-seed, delete existing chunks first.`
-    );
-    console.log(
-      'Run: DELETE FROM "VectorDocument" WHERE "projectId" = \'__knowledge_base__\''
+      `Knowledge base already seeded (${existing} chunks). Use --force to re-seed.`
     );
     await prisma.$disconnect();
     return;
+  }
+
+  if (existing > 0 && forceReseed) {
+    console.log(`Deleting ${existing} existing knowledge base chunks...`);
+    await prisma.vectorDocument.deleteMany({
+      where: { projectId: KNOWLEDGE_BASE_PROJECT_ID },
+    });
+    console.log("Deleted.");
   }
 
   // Read all markdown files from the knowledge base directory

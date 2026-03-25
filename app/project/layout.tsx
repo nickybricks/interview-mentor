@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { AISettingsPanel } from "@/components/ai-settings-panel";
@@ -40,7 +40,7 @@ export default function ProjectLayout({
   const pathname = usePathname();
 
   // Derive the default AI feature from the current page context
-  const defaultFeature = useMemo((): AIFeatureKey => {
+  const defaultFeature = ((): AIFeatureKey => {
     // Chat page: /project/[id]/chat/[chatId] — detect chat type
     const chatMatch = pathname.match(/\/project\/([^/]+)\/chat\/([^/]+)/);
     if (chatMatch) {
@@ -53,9 +53,9 @@ export default function ProjectLayout({
     }
     // Project page or fallback: default to gap_analysis
     return "gap_analysis";
-  }, [pathname, projects]);
+  })();
 
-  const fetchProjects = useCallback(async () => {
+  const fetchProjects = async () => {
     try {
       const res = await fetch("/api/projects");
       if (res.ok) {
@@ -65,17 +65,17 @@ export default function ProjectLayout({
     } catch (err) {
       console.error("Failed to fetch projects:", err);
     }
-  }, []);
+  };
 
   useEffect(() => {
     fetchProjects();
-  }, [fetchProjects]);
+  }, []);
 
   // Close mobile sidebar on navigation + refetch projects so new chats show up
   useEffect(() => {
     setMobileOpen(false);
     fetchProjects();
-  }, [pathname, fetchProjects]);
+  }, [pathname]);
 
   return (
     <div className="flex h-dvh overflow-hidden">

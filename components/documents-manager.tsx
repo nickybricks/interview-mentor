@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 import {
   Card,
   CardContent,
@@ -69,8 +69,7 @@ export function DocumentsManager({
   const totalFiles =
     (hasCv ? 1 : 0) + (hasJd ? 1 : 0) + documents.length;
 
-  const uploadFile = useCallback(
-    async (file: File, type: "cv" | "jobDescription" | "additional") => {
+  const uploadFile = async (file: File, type: "cv" | "jobDescription" | "additional") => {
       if (file.type !== "application/pdf") {
         setError(t("fileUpload.pdfOnly"));
         return;
@@ -109,9 +108,7 @@ export function DocumentsManager({
         setUploading(false);
         setUploadingType(null);
       }
-    },
-    [projectId, onFileUploaded, t]
-  );
+  };
 
   const handleDelete = async (docId: string) => {
     setDeletingId(docId);

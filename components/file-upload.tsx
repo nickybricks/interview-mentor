@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef } from "react";
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
@@ -26,8 +26,7 @@ export function FileUpload({
   const [success, setSuccess] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const uploadFile = useCallback(
-    async (file: File) => {
+  const uploadFile = async (file: File) => {
       if (file.type !== "application/pdf") {
         setError(t("fileUpload.pdfOnly"));
         return;
@@ -66,19 +65,14 @@ export function FileUpload({
       } finally {
         setUploading(false);
       }
-    },
-    [projectId, type, onUploaded, t]
-  );
+  };
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragging(false);
-      const file = e.dataTransfer.files[0];
-      if (file) uploadFile(file);
-    },
-    [uploadFile]
-  );
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files[0];
+    if (file) uploadFile(file);
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

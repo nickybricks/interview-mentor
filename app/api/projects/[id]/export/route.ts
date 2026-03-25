@@ -1,11 +1,14 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/db";
+import { getLocaleFromRequest, t } from "@/lib/i18n-server";
 
 // GET /api/projects/[id]/export - Export project as Markdown
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const locale = getLocaleFromRequest(_request);
+
   try {
     const { id } = await params;
 
@@ -59,8 +62,9 @@ export async function GET(
       }
     }
 
+    const dateLocale = locale === "en" ? "en-US" : "de-DE";
     const avgScore = scoreCount > 0 ? (totalScore / scoreCount).toFixed(1) : "–";
-    const createdDate = new Date(project.createdAt).toLocaleDateString("de-DE", {
+    const createdDate = new Date(project.createdAt).toLocaleDateString(dateLocale, {
       year: "numeric",
       month: "long",
       day: "numeric",
@@ -68,43 +72,43 @@ export async function GET(
 
     // Build markdown
     let md = `# ${project.name}\n\n`;
-    md += `**Erstellt:** ${createdDate}\n`;
-    if (project.company) md += `**Unternehmen:** ${project.company}\n`;
-    if (project.position) md += `**Position:** ${project.position}\n`;
-    md += `**Gesamt-Score:** ${avgScore}/10\n`;
+    md += `**${t(locale, "export.created")}:** ${createdDate}\n`;
+    if (project.company) md += `**${t(locale, "export.company")}:** ${project.company}\n`;
+    if (project.position) md += `**${t(locale, "export.position")}:** ${project.position}\n`;
+    md += `**${t(locale, "export.overallScore")}:** ${avgScore}/10\n`;
     md += `\n---\n\n`;
 
     // Gap Analysis
     if (project.gapAnalysis) {
-      md += `## Gap-Analyse\n\n${project.gapAnalysis}\n\n---\n\n`;
+      md += `## ${t(locale, "export.gapAnalysis")}\n\n${project.gapAnalysis}\n\n---\n\n`;
     }
 
     // Category Scores
     if (Object.keys(categoryScores).length > 0) {
-      md += `## Kategorie-Scores\n\n`;
-      md += `| Kategorie | Score | Anzahl |\n|---|---|---|\n`;
+      md += `## ${t(locale, "export.categoryScores")}\n\n`;
+      md += `| ${t(locale, "export.category")} | ${t(locale, "export.score")} | ${t(locale, "export.count")} |\n|---|---|---|\n`;
       for (const [cat, data] of Object.entries(categoryScores)) {
         const avg = (data.total / data.count).toFixed(1);
-        md += `| ${cat} | ${avg}/10 | ${data.count} Fragen |\n`;
+        md += `| ${cat} | ${avg}/10 | ${data.count} ${t(locale, "export.questions")} |\n`;
       }
       md += `\n---\n\n`;
     }
 
     // Chat Transcripts
     const chatTypeLabels: Record<string, string> = {
-      preparation: "Vorbereitung",
-      gap_analysis: "Gap-Analyse",
-      mock_interview: "Mock Interview",
+      preparation: t(locale, "export.preparation"),
+      gap_analysis: t(locale, "export.gapAnalysisChat"),
+      mock_interview: t(locale, "export.mockInterview"),
     };
 
     for (const chat of project.chats) {
       const label = chatTypeLabels[chat.type] || chat.type;
-      const chatDate = new Date(chat.createdAt).toLocaleDateString("de-DE");
+      const chatDate = new Date(chat.createdAt).toLocaleDateString(dateLocale);
       md += `## ${label} (${chatDate})\n\n`;
 
       for (const msg of chat.messages) {
         if (msg.role === "system") continue;
-        const prefix = msg.role === "user" ? "**Du:**" : "**Coach:**";
+        const prefix = msg.role === "user" ? `**${t(locale, "export.you")}:**` : `**${t(locale, "export.coach")}:**`;
         md += `${prefix} ${msg.content}\n\n`;
         if (msg.role === "user" && msg.score != null) {
           md += `> Score: ${msg.score}/10\n\n`;

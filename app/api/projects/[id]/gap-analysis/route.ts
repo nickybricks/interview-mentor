@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { chat } from "@/lib/langchain";
 import { readSettings, getDefaultSystemPrompt } from "@/lib/ai-settings";
+import { getLocaleFromRequest, t, type Locale } from "@/lib/i18n-server";
 
 // POST /api/projects/[id]/gap-analysis — Regenerate gap analysis
 export async function POST(
@@ -9,6 +10,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const locale = getLocaleFromRequest(_request);
 
   try {
     const project = await prisma.project.findUnique({
@@ -39,7 +41,7 @@ export async function POST(
     });
 
     // Run gap analysis in background
-    runGapAnalysis(id, project.cvText, project.jobDescription, additionalDocs).catch((err) =>
+    runGapAnalysis(id, project.cvText, project.jobDescription, additionalDocs, locale).catch((err) =>
       console.error("Gap analysis regeneration failed:", err)
     );
 
@@ -57,7 +59,8 @@ async function runGapAnalysis(
   projectId: string,
   cvText: string,
   jobDescription: string,
-  additionalDocs: { name: string; text: string }[] = []
+  additionalDocs: { name: string; text: string }[] = [],
+  locale: Locale = "de"
 ) {
   const aiSettings = await readSettings();
   const gapSettings = aiSettings.gap_analysis;
@@ -81,8 +84,7 @@ async function runGapAnalysis(
       { role: "system", content: systemPrompt },
       {
         role: "user",
-        content:
-          "Bitte analysiere meinen Lebenslauf gegen die Stellenanzeige.",
+        content: t(locale, "api.gapAnalysisUserMessage"),
       },
     ],
     {

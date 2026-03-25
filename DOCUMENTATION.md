@@ -1,6 +1,6 @@
 # Interview Mentor – Code Documentation
 
-> Last updated: March 21, 2026 | Status: Sprint 1 complete | Sprint 2 Phase 0 (Supabase + PostgreSQL migration) complete | Phase 1 (LangChain refactor) complete | Phase 2 (RAG ingestion) complete | Phase 3 (RAG retrieval + query translation) complete | Phase 4 (Tool Calling) complete
+> Last updated: March 25, 2026 | Status: Sprint 1 complete | Sprint 2 Phase 0 (Supabase + PostgreSQL migration) complete | Phase 1 (LangChain refactor) complete | Phase 2 (RAG ingestion) complete | Phase 3 (RAG retrieval + query translation) complete | Phase 4 (Tool Calling) complete
 
 ---
 
@@ -93,7 +93,8 @@ interview-mentor/
 │   ├── tools.ts                #     LangChain tool definitions (score_answer, get_weak_areas, search_knowledge_base)
 │   ├── prompts.ts              #     All system prompts (Marcus Webb v2 + Gap Analysis v2 + Mock)
 │   ├── security.ts             #     Input validation + security guards
-│   ├── i18n.tsx                 #     Internationalization (DE/EN) context + translations
+│   ├── i18n.tsx                 #     Internationalization (DE/EN) React context + useI18n() hook
+│   ├── i18n-server.ts           #     Server-side i18n: shared translations, t(), getLocaleFromRequest()
 │   ├── utils.ts                #     Tailwind helper function (cn)
 │   ├── knowledge-base/          #     11 RAG knowledge base markdown files
 │   │   ├── rubrics-and-scoring.md          # 5-dimension scoring rubric
@@ -398,11 +399,27 @@ Tool descriptions are carefully crafted to prevent over-eager use (e.g., "Do NOT
 
 Exports `interviewTools` array with all 3 tools, used by `createBoundModel()` in `langchain.ts`.
 
-### `lib/i18n.tsx` – Internationalization (DE/EN)
+### `lib/i18n-server.ts` – Server-Side i18n (Shared Translations)
+
+```typescript
+// Server-side translation function — usable in API routes
+import { t, getLocaleFromRequest } from "@/lib/i18n-server";
+
+const locale = getLocaleFromRequest(request); // reads ?locale= or x-locale header
+t(locale, "export.created")  // → "Erstellt" (DE) or "Created" (EN)
+```
+
+**What it exports:**
+- `translations` object — all ~130 translation keys (DE + EN), including UI, API, and export strings
+- `t(locale, key)` — server-side translation lookup (type-safe `TranslationKey`)
+- `getLocaleFromRequest(req)` — extracts locale from `?locale=` query param or `x-locale` header, defaults to `"de"`
+- `Locale` and `TranslationKey` types
+
+### `lib/i18n.tsx` – Client-Side i18n (React Context)
 
 ```typescript
 // React Context providing locale state + translation function
-// Supports "de" (German, default) and "en" (English)
+// Imports translations from i18n-server.ts (single source of truth)
 
 const { locale, setLocale, t } = useI18n();
 
@@ -412,9 +429,10 @@ t("sidebar.newProject")  // → "Neue Bewerbung" (DE) or "New Application" (EN)
 **How it works:**
 1. `I18nProvider` wraps the app in `layout.tsx`, manages `locale` state
 2. Locale is persisted to `localStorage` under key `interview-mentor-locale`
-3. `t(key)` looks up translations from a typed `translations` object (~108 keys)
+3. `t(key)` looks up translations from the shared `translations` object in `i18n-server.ts` (~130 keys)
 4. All components use `useI18n()` hook to access `t()` for UI text
 5. Language is switched via the profile menu in the sidebar (instant, no reload)
+6. Client-side fetch calls pass locale to API routes via `?locale=` query param or `x-locale` header
 
 ### `lib/security.ts` – Security Guards
 
@@ -759,7 +777,6 @@ Each test records: whether the input was blocked by the regex filter, whether th
 - **Voice input via Whisper API** — Currently implemented with basic record-and-transcribe; future work includes real-time streaming transcription for more natural conversation flow
 - **Version history on regenerate** — Currently supports `< 1/2 >` version navigation; future work includes diff view between versions and ability to branch conversations
 - **Admin vs. user mode** — Add role-based access for coaches/mentors to review candidate progress, assign exercises, and track improvement over time
-- **Language switching fix** — System prompts remain in German when UI switches to English; prompts need full i18n support to match UI locale
 - **Score display in header** — Show overall score prominently in the app header/sidebar for quick reference without navigating to project overview
 - **Deployment (Phase 6)** — Production deployment to Vercel or similar platform; requires environment variable configuration, database migration strategy (SQLite → PostgreSQL), and domain setup
 
@@ -921,7 +938,7 @@ Each test records: whether the input was blocked by the regex filter, whether th
 
 - **Voice recording button** added to the chat input area, allowing users to speak their answers instead of typing — natural for interview practice.
   - Uses browser **MediaRecorder API** to record audio as `audio/webm` (fallback `audio/mp4` for Safari)
-  - Sends recording to new **`POST /api/transcribe`** endpoint which uses **OpenAI Whisper (`whisper-1`)** with `language: "de"` for high-quality German transcription
+  - Sends recording to new **`POST /api/transcribe`** endpoint which uses **OpenAI Whisper (`whisper-1`)** with dynamic `language` based on the i18n locale for high-quality transcription
   - Transcribed text is appended to the textarea (combinable with typed text)
   - **Visual states**: idle (ghost mic icon), recording (red pulsing with stop icon), transcribing (loading spinner)
   - Inline error messages replace the hint text below the input (auto-dismiss after 5s)
@@ -1060,13 +1077,7 @@ Each test records: whether the input was blocked by the regex filter, whether th
 
 - **Database:** Added `tokens` (Int?), `inputTokens` (Int?), and `model` (String?) fields to the Message model. The existing `cost` field now stores the total cost (input + output) with 6-decimal precision.
 
-- **Model pricing constants:** Extracted `MODEL_PRICING` to a top-level constant in `app/api/messages/route.ts` for easy updates when OpenAI changes prices:
-  - GPT-5 mini: $0.25/$2.00 per 1M tokens (input/output)
-  - GPT-5 nano: $0.05/$0.40
-  - GPT-4.1 mini: $0.40/$1.60
-  - GPT-4.1 nano: $0.10/$0.40
-  - GPT-4o mini: $0.15/$0.60
-  - Codex mini: $0.75/$3.00
+- **Model pricing:** Pricing per model is fetched dynamically via `lib/model-pricing.ts` (LiteLLM cost data, 24h cache, hardcoded fallback). Originally introduced as a hardcoded `MODEL_PRICING` constant, later replaced with dynamic fetching.
 
 - **SSE done event expanded:** Now sends full breakdown: `inputTokens`, `outputTokens`, `totalTokens`, `inputCost`, `outputCost`, `totalCost`, `model`, `tokensPerSec`, `durationMs`.
 
@@ -1587,3 +1598,55 @@ Each test records: whether the input was blocked by the regex filter, whether th
 - `lib/i18n.tsx` – 18 new translation keys
 
 **What's next:** Phase 4b — Tool Calling Evaluation (test tool accuracy, scoring calibration)
+
+### Session (March 25, 2026) – Server-Side i18n: API Routes & Prompts Follow Locale
+
+**Problem:** i18n covered the UI but not API routes or prompts. Gap analysis trigger was hardcoded German ("Bitte analysiere..."), export used hardcoded German labels ("Erstellt", "Kategorie-Scores", "Du/Coach"), and the Whisper endpoint hardcoded `language: "de"`. Switching the UI to English had no effect on API-generated content.
+
+**Solution:** Extracted translations into a shared `lib/i18n-server.ts` module usable by both client components and server-side API routes. Client-side fetch calls now pass the active locale to API routes via `?locale=` query param or `x-locale` header.
+
+- **New `lib/i18n-server.ts`:** Extracted the `translations` object from `i18n.tsx` into a shared module. Added server-side `t(locale, key)` function and `getLocaleFromRequest(req)` helper that reads `?locale=` query param or `x-locale` header (defaults to `"de"`). ~22 new translation keys for API/export content (DE + EN): `api.gapAnalysisUserMessage`, `api.transcribeNoFile/TooLarge/Empty/Failed`, `export.created/company/position/overallScore/gapAnalysis/categoryScores/category/score/count/questions/you/coach/preparation/gapAnalysisChat/mockInterview`.
+
+- **Refactored `lib/i18n.tsx`:** Now imports `translations`, `Locale`, and `TranslationKey` from `i18n-server.ts` instead of defining translations inline. Still provides the React Context + `useI18n()` hook for client components.
+
+- **Fixed `app/api/transcribe/route.ts`:** `language: "de"` → `language: locale` (Whisper now follows the i18n locale). All hardcoded German error messages replaced with `t(locale, key)` calls.
+
+- **Fixed `app/api/projects/[id]/gap-analysis/route.ts`:** Hardcoded `"Bitte analysiere meinen Lebenslauf gegen die Stellenanzeige."` → `t(locale, "api.gapAnalysisUserMessage")`. Locale is read from the `x-locale` request header and passed through to `runGapAnalysis()`.
+
+- **Fixed `app/api/projects/[id]/export/route.ts`:** All 12+ hardcoded German labels replaced with `t(locale, ...)` calls. Date formatting changed from `toLocaleDateString("de-DE")` to dynamic locale (`"en-US"` or `"de-DE"`). Chat type labels, column headers, and role prefixes all translated.
+
+- **Cleaned up `lib/ai-settings.ts`:** Removed dead `FEATURE_LABELS` constant (already replaced by `FEATURE_LABEL_KEYS` in `ai-settings-panel.tsx`).
+
+- **Updated client-side fetch calls:**
+  - `app/project/[id]/page.tsx` — Gap analysis POST adds `x-locale` header; export GET adds `?locale=` query param
+  - `components/chat-window.tsx` — Transcribe POST adds `?locale=` query param
+
+**Modified files:**
+- `lib/i18n-server.ts` – New file: shared translations, `t()`, `getLocaleFromRequest()`
+- `lib/i18n.tsx` – Imports translations from `i18n-server.ts`
+- `app/api/transcribe/route.ts` – Dynamic Whisper language + translated errors
+- `app/api/projects/[id]/gap-analysis/route.ts` – Translated user message
+- `app/api/projects/[id]/export/route.ts` – All labels translated + dynamic date locale
+- `lib/ai-settings.ts` – Removed dead `FEATURE_LABELS`
+- `app/project/[id]/page.tsx` – Passes locale to API calls
+- `components/chat-window.tsx` – Passes locale to transcribe endpoint
+
+### Session (March 25, 2026) – Dynamic Model Pricing
+
+**Problem:** `MODEL_PRICING` was a hardcoded constant in `app/api/messages/route.ts` that required manual updates whenever OpenAI changed prices or new models were added.
+
+**Solution:** Created `lib/model-pricing.ts` — a utility that dynamically fetches pricing from LiteLLM's published model cost data (`model_prices_and_context_window.json`) and replaces the hardcoded constant.
+
+- **`lib/model-pricing.ts`** (new file):
+  - Fetches pricing from LiteLLM's GitHub-hosted JSON (covers 300+ models across providers)
+  - **24-hour in-memory cache** to avoid repeated network calls
+  - **5-second fetch timeout** so it never blocks request handling
+  - **Graceful fallback** to hardcoded rates if fetch fails (also reuses stale cache when available)
+  - **Model name resolution** with `openai/` prefix lookup (LiteLLM naming convention)
+  - Exports `getModelPricing(model)` → `{ input, output }` (USD per 1M tokens)
+
+- **`app/api/messages/route.ts`**: Removed `MODEL_PRICING` constant and its 6 hardcoded entries. Cost calculation now calls `await getModelPricing(modelUsed)` instead.
+
+**Modified files:**
+- `lib/model-pricing.ts` – New file: dynamic pricing with caching + fallback
+- `app/api/messages/route.ts` – Replaced hardcoded `MODEL_PRICING` with `getModelPricing()` import

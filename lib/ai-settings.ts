@@ -25,12 +25,6 @@ export interface AISettings {
   mock_interview: AIFeatureSettings;
 }
 
-export const FEATURE_LABELS: Record<AIFeatureKey, string> = {
-  gap_analysis: "Gap-Analyse",
-  preparation: "Vorbereitung",
-  mock_interview: "Mock-Interview",
-};
-
 export function getDefaultSystemPrompt(feature: AIFeatureKey): string {
   switch (feature) {
     case "gap_analysis":

@@ -34,9 +34,9 @@ The AI coach uses a 50-question bank from the WHO interview method (Screening �
 - **RAG Knowledge Base** — 11 curated coaching documents (scoring rubrics, STAR method, earned secrets, coaching frameworks, drills) embedded via pgvector for context-aware responses
 - **Tool Calling** — LangChain tools for answer scoring (5-dimension rubric), weak area tracking, and knowledge base search
 - **Security Guards** — Defense-in-depth prompt injection protection (40+ regex patterns, obfuscation detection, base64 payload scanning, prompt-level LLM guardrail)
-- **Voice Input** — Speech-to-text via OpenAI Whisper for natural interview practice
+- **Voice Input** — Speech-to-text via OpenAI Whisper with locale-aware language detection
 - **Multi-File Upload** — CV, job description, and additional documents (certificates, references, transcripts)
-- **Internationalization** — German (default) and English UI with instant switching
+- **Internationalization** — German (default) and English with instant switching — covers UI, API routes, prompts, export labels, and Whisper transcription language
 - **Token & Cost Tracking** — Per-message input/output token counts, cost breakdown, speed metrics
 - **Regenerate & Version Navigation** — ChatGPT-style `< 1/2 >` version arrows for regenerated responses
 - **Markdown Export** — Download full project data (gap analysis, scores, chat transcripts) as `.md`
