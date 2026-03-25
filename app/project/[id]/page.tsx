@@ -25,6 +25,7 @@ import {
   Trophy,
   Download,
   Loader2,
+  ChevronDown,
 } from "lucide-react";
 
 interface ProjectDetail {
@@ -60,6 +61,7 @@ export default function ProjectPage() {
   const [loading, setLoading] = useState(true);
   const [gapLoading, setGapLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [gapOpen, setGapOpen] = useState(false);
 
   const fetchProject = async () => {
     try {
@@ -195,7 +197,7 @@ export default function ProjectPage() {
 
         <Separator />
 
-        {/* Documents + Gap Analysis */}
+        {/* Documents */}
         <DocumentsManager
           projectId={project.id}
           hasCv={!!project.cvText}
@@ -206,25 +208,102 @@ export default function ProjectPage() {
           onStartGapAnalysis={handleStartGapAnalysis}
         />
 
+        {/* Start Chat Buttons */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">{t("project.coaching")}</CardTitle>
+            <CardDescription>
+              {t("project.coachingDesc")}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-3 sm:grid-cols-3">
+              {/* Gap Analysis */}
+              <button
+                onClick={() => startChat("gap_analysis")}
+                disabled={!project.cvText || !project.jobDescription}
+                className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Search className="size-8 text-amber-600" />
+                <span className="font-medium">{t("chatType.gap_analysis")}</span>
+                <span className="text-xs text-muted-foreground">
+                  {!project.cvText || !project.jobDescription
+                    ? t("project.cvRequired")
+                    : t("project.gapCompare")}
+                </span>
+              </button>
+
+              {/* Preparation */}
+              <button
+                onClick={() => startChat("preparation")}
+                className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50"
+              >
+                <GraduationCap className="size-8 text-blue-600" />
+                <span className="font-medium">{t("chatType.preparation")}</span>
+                <span className="text-xs text-muted-foreground">
+                  {t("project.prepQuestions")}
+                </span>
+              </button>
+
+              {/* Mock Interview */}
+              <button
+                onClick={() => startChat("mock_interview")}
+                disabled={!mockUnlocked}
+                className="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Mic className="size-8 text-emerald-600" />
+                <span className="font-medium">{t("chatType.mock_interview")}</span>
+                <span className="text-xs text-muted-foreground">
+                  {mockUnlocked
+                    ? t("project.mockSimulation")
+                    : t("project.mockLocked").replace("{score}", score.toFixed(1))}
+                </span>
+                {!mockUnlocked && (
+                  <Badge variant="outline" className="absolute -top-2 -right-2 text-[10px]">
+                    {t("project.locked")}
+                  </Badge>
+                )}
+              </button>
+            </div>
+          </CardContent>
+        </Card>
+
         {/* Gap Analysis Result */}
         {project.gapAnalysis && !gapLoading && (
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Search className="size-5 text-amber-600" />
-                {t("project.gapTitle")}
-              </CardTitle>
+            <CardHeader
+              className="cursor-pointer select-none"
+              onClick={() => setGapOpen((o) => !o)}
+            >
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-lg">
+                  <Search className="size-5 text-amber-600" />
+                  {t("project.gapTitle")}
+                </CardTitle>
+                <ChevronDown
+                  className={`size-5 text-muted-foreground transition-transform duration-300 ${
+                    gapOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </div>
               <CardDescription className="mt-1.5">
                 {t("project.gapAutoDesc")}
               </CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="prose prose-sm dark:prose-invert max-w-none">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {project.gapAnalysis}
-                </ReactMarkdown>
+            <div
+              className="grid transition-[grid-template-rows] duration-300 ease-in-out"
+              style={{ gridTemplateRows: gapOpen ? "1fr" : "0fr" }}
+            >
+              <div className="overflow-hidden">
+                <CardContent>
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {project.gapAnalysis}
+                    </ReactMarkdown>
+                  </div>
+                </CardContent>
               </div>
-            </CardContent>
+            </div>
           </Card>
         )}
 
@@ -289,66 +368,6 @@ export default function ProjectPage() {
             </CardContent>
           </Card>
         )}
-
-        {/* Start Chat Buttons */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">{t("project.coaching")}</CardTitle>
-            <CardDescription>
-              {t("project.coachingDesc")}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-3 sm:grid-cols-3">
-              {/* Gap Analysis */}
-              <button
-                onClick={() => startChat("gap_analysis")}
-                disabled={!project.cvText || !project.jobDescription}
-                className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Search className="size-8 text-amber-600" />
-                <span className="font-medium">{t("chatType.gap_analysis")}</span>
-                <span className="text-xs text-muted-foreground">
-                  {!project.cvText || !project.jobDescription
-                    ? t("project.cvRequired")
-                    : t("project.gapCompare")}
-                </span>
-              </button>
-
-              {/* Preparation */}
-              <button
-                onClick={() => startChat("preparation")}
-                className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50"
-              >
-                <GraduationCap className="size-8 text-blue-600" />
-                <span className="font-medium">{t("chatType.preparation")}</span>
-                <span className="text-xs text-muted-foreground">
-                  {t("project.prepQuestions")}
-                </span>
-              </button>
-
-              {/* Mock Interview */}
-              <button
-                onClick={() => startChat("mock_interview")}
-                disabled={!mockUnlocked}
-                className="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Mic className="size-8 text-emerald-600" />
-                <span className="font-medium">{t("chatType.mock_interview")}</span>
-                <span className="text-xs text-muted-foreground">
-                  {mockUnlocked
-                    ? t("project.mockSimulation")
-                    : t("project.mockLocked").replace("{score}", score.toFixed(1))}
-                </span>
-                {!mockUnlocked && (
-                  <Badge variant="outline" className="absolute -top-2 -right-2 text-[10px]">
-                    {t("project.locked")}
-                  </Badge>
-                )}
-              </button>
-            </div>
-          </CardContent>
-        </Card>
 
         {/* Export */}
         <div className="flex justify-end">
