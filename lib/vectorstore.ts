@@ -1,54 +1,18 @@
 import { OpenAIEmbeddings } from "@langchain/openai";
-import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 import { prisma } from "@/lib/db";
+
+const KNOWLEDGE_BASE_PROJECT_ID = "__knowledge_base__";
 
 const embeddings = new OpenAIEmbeddings({
   model: "text-embedding-3-small",
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-const splitter = new RecursiveCharacterTextSplitter({
-  chunkSize: 500,
-  chunkOverlap: 50,
-});
-
 /**
- * Chunk text, embed each chunk, and insert into VectorDocument table.
- */
-export async function addDocuments(
-  projectId: string,
-  text: string,
-  source: string
-): Promise<number> {
-  const chunks = await splitter.splitText(text);
-  const vectors = await embeddings.embedDocuments(chunks);
-
-  // Batch insert all chunks with their embeddings
-  for (let i = 0; i < chunks.length; i++) {
-    const content = chunks[i];
-    const embedding = vectors[i];
-    const embeddingStr = `[${embedding.join(",")}]`;
-
-    await prisma.$executeRawUnsafe(
-      `INSERT INTO "VectorDocument" (id, "projectId", source, content, metadata, "createdAt", embedding)
-       VALUES (gen_random_uuid(), $1, $2, $3, $4, NOW(), $5::vector)`,
-      projectId,
-      source,
-      content,
-      JSON.stringify({ chunkIndex: i, totalChunks: chunks.length }),
-      embeddingStr
-    );
-  }
-
-  return chunks.length;
-}
-
-/**
- * Embed a query and retrieve the top-k most similar chunks for a project.
- * Includes both project-specific documents and the shared knowledge base.
+ * Embed a query and retrieve the top-k most similar knowledge base chunks.
+ * Only searches the shared knowledge base (1500-char chunks with 200 overlap).
  */
 export async function retrieveContext(
-  projectId: string,
   query: string,
   k: number = 5
 ): Promise<{ content: string; source: string; similarity: number }[]> {
@@ -60,11 +24,11 @@ export async function retrieveContext(
   >(
     `SELECT content, source, 1 - (embedding <=> $1::vector) AS similarity
      FROM "VectorDocument"
-     WHERE "projectId" = $2 OR "projectId" = '__knowledge_base__'
+     WHERE "projectId" = $2
      ORDER BY embedding <=> $1::vector
      LIMIT $3`,
     embeddingStr,
-    projectId,
+    KNOWLEDGE_BASE_PROJECT_ID,
     k
   );
 

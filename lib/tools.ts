@@ -197,8 +197,8 @@ export const getWeakAreas = tool(
 // ─── Tool 3: search_knowledge_base ──────────────────────────────────────────
 
 export const searchKnowledgeBase = tool(
-  async ({ query, projectId }) => {
-    const results = await retrieveContext(projectId, query, 5);
+  async ({ query }) => {
+    const results = await retrieveContext(query, 5);
 
     return JSON.stringify({
       results: results.map((r) => ({
@@ -214,7 +214,6 @@ export const searchKnowledgeBase = tool(
       "Search the interview coaching knowledge base for methodology tips, frameworks (STAR, WHO), scoring rubrics, practice drill instructions, story-building techniques, and best practices. Use this when the candidate asks HOW to answer a type of question, needs coaching methodology, or wants to understand interview frameworks. Do NOT use for scoring or progress tracking.",
     schema: z.object({
       query: z.string().describe("The search query to find relevant coaching material"),
-      projectId: z.string().describe("The project ID for context-aware retrieval"),
     }),
   }
 );

@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { validateFileBuffer } from "@/lib/security";
-import { addDocuments } from "@/lib/vectorstore";
 import { PDFParse } from "pdf-parse";
 import path from "path";
 
@@ -76,16 +75,12 @@ export async function POST(request: NextRequest) {
         },
       });
 
-      // Embed the document text into the vector store for RAG
-      const chunksEmbedded = await addDocuments(projectId, text, file.name);
-
       return NextResponse.json({
         success: true,
         type,
         documentId: doc.id,
         name: doc.name,
         textLength: text.length,
-        chunksEmbedded,
       });
     }
 
@@ -98,15 +93,11 @@ export async function POST(request: NextRequest) {
       data: updateData,
     });
 
-    // Embed the uploaded document into the vector store for RAG
-    const chunksEmbedded = await addDocuments(projectId, text, `${type}:${file.name}`);
-
     return NextResponse.json({
       success: true,
       type,
       textLength: text.length,
       projectId: project.id,
-      chunksEmbedded,
     });
   } catch (error) {
     console.error("Upload failed:", error);

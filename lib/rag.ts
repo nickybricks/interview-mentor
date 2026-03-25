@@ -54,15 +54,17 @@ async function generateAlternativeQueries(
 }
 
 /**
- * Retrieve context using multi-query retrieval (query translation).
+ * Retrieve knowledge base context using multi-query retrieval (query translation).
+ *
+ * Only searches the knowledge base — CV/JD text is injected directly into the
+ * system prompt (full text), so it is never embedded or retrieved via RAG.
  *
  * 1. Generates 3 alternative rephrasings of the user query
- * 2. Searches the vector store with all 4 queries (original + 3 alternatives)
+ * 2. Searches the KB vector store with all 4 queries (original + 3 alternatives)
  * 3. Deduplicates and ranks results by highest similarity
  * 4. Returns top-k chunks with sources and the generated queries
  */
 export async function retrieveWithQueryTranslation(
-  projectId: string,
   query: string,
   featureKey: AIFeatureKey,
   k: number = 5
@@ -70,10 +72,10 @@ export async function retrieveWithQueryTranslation(
   // Step 1: Generate alternative queries
   const alternativeQueries = await generateAlternativeQueries(query, featureKey);
 
-  // Step 2: Search with all queries (original + alternatives)
+  // Step 2: Search KB with all queries (original + alternatives)
   const allQueries = [query, ...alternativeQueries];
   const allResults = await Promise.all(
-    allQueries.map((q) => retrieveContext(projectId, q, k))
+    allQueries.map((q) => retrieveContext(q, k))
   );
 
   // Step 3: Merge and deduplicate by content

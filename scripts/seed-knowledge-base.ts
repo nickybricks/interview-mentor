@@ -74,8 +74,8 @@ async function main() {
   });
 
   const splitter = new RecursiveCharacterTextSplitter({
-    chunkSize: 500,
-    chunkOverlap: 50,
+    chunkSize: 1500,
+    chunkOverlap: 200,
   });
 
   let totalChunks = 0;

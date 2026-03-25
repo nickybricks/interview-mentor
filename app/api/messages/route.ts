@@ -143,7 +143,6 @@ export async function POST(request: NextRequest) {
     if (RAG_ENABLED_TYPES.includes(chat.type) && userQuery) {
       try {
         const ragResult = await retrieveWithQueryTranslation(
-          chat.projectId,
           userQuery,
           featureKey,
         );
@@ -301,9 +300,6 @@ export async function POST(request: NextRequest) {
                 // Inject projectId and jobDescription where needed
                 const args = { ...tc.args };
                 if (tc.name === "get_weak_areas" && !args.projectId) {
-                  args.projectId = chat.projectId;
-                }
-                if (tc.name === "search_knowledge_base" && !args.projectId) {
                   args.projectId = chat.projectId;
                 }
                 if (tc.name === "score_answer" && !args.jobDescription) {
