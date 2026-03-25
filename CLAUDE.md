@@ -67,6 +67,17 @@ git push {remote} main --tags
 - Default remote is `github`
 - Always push tags with `--tags`
 
+### 5. Create GitHub Release
+
+```bash
+# Create a release on GitHub with release notes
+gh release create v{VERSION} --title "v{VERSION}: {Brief description}" --notes "{Release notes in markdown}"
+```
+
+- Always create a GitHub release after pushing a new tag
+- Include a `## Changes` section with bullet points summarizing what changed
+- The release title should match the commit message format: `v{VERSION}: {Brief description}`
+
 ---
 
 ## Code Conventions
