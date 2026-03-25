@@ -103,12 +103,17 @@ export function AISettingsPanel({ onClose, defaultFeature }: AISettingsPanelProp
   const [dirty, setDirty] = useState(false);
   const [promptDialogOpen, setPromptDialogOpen] = useState(false);
 
-  // Sync selectedFeature when defaultFeature prop changes (e.g. navigating to different page)
-  useEffect(() => {
-    if (defaultFeature) {
-      setSelectedFeature(defaultFeature);
+  // Sync selectedFeature when defaultFeature prop changes (render-time adjustment)
+  const [prevDefaultFeature, setPrevDefaultFeature] = useState(defaultFeature);
+  if (defaultFeature && defaultFeature !== prevDefaultFeature) {
+    setPrevDefaultFeature(defaultFeature);
+    setSelectedFeature(defaultFeature);
+    if (settings) {
+      setDraft(settings[defaultFeature]);
+      setDirty(false);
+      setSaved(false);
     }
-  }, [defaultFeature]);
+  }
 
   // Fetch settings + default prompts on mount (cache-busted)
   useEffect(() => {
@@ -125,15 +130,6 @@ export function AISettingsPanel({ onClose, defaultFeature }: AISettingsPanelProp
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  // When feature changes, update draft from settings
-  useEffect(() => {
-    if (settings) {
-      setDraft(settings[selectedFeature]);
-      setDirty(false);
-      setSaved(false);
-    }
-  }, [selectedFeature, settings]);
 
   const updateDraft = (patch: Partial<AIFeatureSettings>) => {
     setDraft((prev) => (prev ? { ...prev, ...patch } : prev));
@@ -199,7 +195,15 @@ export function AISettingsPanel({ onClose, defaultFeature }: AISettingsPanelProp
         <Select
           value={selectedFeature}
           onValueChange={(val) => {
-            if (val) setSelectedFeature(val as AIFeatureKey);
+            if (val) {
+              const key = val as AIFeatureKey;
+              setSelectedFeature(key);
+              if (settings) {
+                setDraft(settings[key]);
+                setDirty(false);
+                setSaved(false);
+              }
+            }
           }}
         >
           <SelectTrigger className="w-full">

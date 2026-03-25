@@ -67,11 +67,7 @@ export default function ProjectLayout({
     }
   };
 
-  useEffect(() => {
-    fetchProjects();
-  }, []);
-
-  // Close mobile sidebar on navigation + refetch projects so new chats show up
+  // Fetch projects on mount & on navigation; close mobile sidebar on navigate
   useEffect(() => {
     setMobileOpen(false);
     fetchProjects();

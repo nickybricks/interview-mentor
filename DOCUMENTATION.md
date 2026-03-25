@@ -48,6 +48,7 @@ The user uploads their resume (PDF) and a job description. The bot analyzes both
 | **AI Framework** | LangChain (`@langchain/openai`, `@langchain/core/tools`) | Framework-agnostic AI layer with tool calling support wrapping OpenAI ChatGPT models |
 | **AI Model** | OpenAI gpt-4.1-mini (via LangChain) | Generates interview questions and feedback |
 | **PDF Parsing** | pdf-parse v2 | Extracts text from uploaded PDFs |
+| **React Compiler** | `babel-plugin-react-compiler` | Automatic memoization — no manual `useCallback`/`useMemo`/`React.memo` needed |
 
 ---
 
@@ -1650,3 +1651,49 @@ Each test records: whether the input was blocked by the regex filter, whether th
 **Modified files:**
 - `lib/model-pricing.ts` – New file: dynamic pricing with caching + fallback
 - `app/api/messages/route.ts` – Replaced hardcoded `MODEL_PRICING` with `getModelPricing()` import
+
+### Session (March 25, 2026) – React 19 Compiler: Automatic Memoization
+
+**Problem:** The codebase used manual `useCallback`, `useMemo`, and `React.memo` for performance optimization — 15 instances across 7 files. This added boilerplate, dependency arrays that could go stale, and cognitive overhead for developers.
+
+**Solution:** Enabled the React 19 Compiler (`babel-plugin-react-compiler`) in `next.config.ts`, which automatically handles memoization at compile time. Removed all manual memoization wrappers.
+
+- **Enabled React Compiler** in `next.config.ts`: `reactCompiler: true`
+- **Installed** `babel-plugin-react-compiler` as a dependency
+- **Removed 15 manual memoization wrappers** across 7 files:
+  - `components/chat-window.tsx` — 5 `useCallback`s (`scrollToBottom`, `streamResponse`, `regenerateLastAnswer`, `switchVersion`, `toggleRecording`)
+  - `app/project/[id]/page.tsx` — 3 `useCallback`s (`fetchProject`, `handleFileUploaded`, `handleStartGapAnalysis`)
+  - `app/project/layout.tsx` — 1 `useCallback` (`fetchProjects`) + 1 `useMemo` (`defaultFeature` → IIFE)
+  - `components/documents-manager.tsx` — 1 `useCallback` (`uploadFile`)
+  - `components/file-upload.tsx` — 2 `useCallback`s (`uploadFile`, `handleDrop`)
+  - `lib/i18n.tsx` — 2 `useCallback`s (`setLocale`, `t`)
+  - `components/ui/slider.tsx` — 1 `React.useMemo` (`_values` → inline expression)
+- **Cleaned up imports** — removed unused `useCallback`, `useMemo` imports from all files
+- **Cleaned up dependency arrays** — removed `useCallback` refs from `useEffect` dependency arrays (e.g., `[fetchProjects]` → `[]`, `[streamResponse]` removed)
+
+**Modified files:**
+- `next.config.ts` – Added `reactCompiler: true`
+- `package.json` – Added `babel-plugin-react-compiler` dependency
+- `components/chat-window.tsx` – Removed 5 useCallbacks
+- `app/project/[id]/page.tsx` – Removed 3 useCallbacks
+- `app/project/layout.tsx` – Removed useCallback + useMemo, merged useEffects
+- `components/documents-manager.tsx` – Removed useCallback
+- `components/file-upload.tsx` – Removed 2 useCallbacks
+- `lib/i18n.tsx` – Removed 2 useCallbacks
+- `components/ui/slider.tsx` – Removed React.useMemo
+
+### Session (March 25, 2026) – Reduce useEffect Usage
+
+**Problem:** 3 of 11 `useEffect` calls across the codebase were unnecessary per React's "You Might Not Need an Effect" guidelines — syncing state from props and deriving state from other state changes.
+
+**Solution:** Eliminated 3 useEffects (11 → 8 total):
+
+- **`components/ai-settings-panel.tsx`** — Removed 2 useEffects:
+  1. Prop-to-state sync (`defaultFeature` → `selectedFeature`) replaced with render-time state adjustment pattern
+  2. Derived state reset (`selectedFeature` → `draft`) moved into the Select's `onValueChange` event handler
+- **`app/project/layout.tsx`** — Merged 2 useEffects into 1: the mount-only fetch and pathname-change fetch were redundant since pathname changes include initial render
+
+**Modified files:**
+- `components/ai-settings-panel.tsx` – Render-time prop sync, event-driven draft reset
+- `app/project/layout.tsx` – Merged duplicate fetch effects
+- `package.json` – Version bump to 0.4.1
