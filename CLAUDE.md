@@ -9,29 +9,15 @@
 - **App**: Interview Mentor — AI-powered interview coach (Next.js 16 + TypeScript)
 - **Repo**: `https://github.com/nickybricks/interview-mentor.git` (remote: `github`)
 - **Current version**: Check `package.json` `"version"` field for the latest
+- **Documentation**: See `README.md` for architecture, database, API routes, security, and RAG pipeline
 
 ---
 
 ## Session Start Checklist
 
 1. Read this file (`CLAUDE.md`)
-2. Quickly check `DOCUMENTATION.md` status line (line 3) to understand current project state
+2. Check `README.md` for project architecture and current state
 3. Check `package.json` version to know the current release
-
----
-
-## Session End Rules
-
-### Always update DOCUMENTATION.md
-
-At the end of every working session (when significant changes were made), update `DOCUMENTATION.md`:
-
-1. Update the **status line** (line 3) with the current state
-2. Add entries to the **Change Log** section at the bottom with:
-   - Date
-   - What was done
-   - What files were changed
-3. Update any sections that were affected by the changes (e.g., new API routes, new lib files, schema changes, new components)
 
 ---
 
@@ -58,12 +44,7 @@ Before pushing, ensure `README.md` reflects:
 - Updated tech stack if dependencies changed
 - Updated setup instructions if env vars or steps changed
 
-### 3. Update DOCUMENTATION.md
-
-- Follow the session end rules above
-- Make sure the change log has an entry for this release
-
-### 4. Commit & Tag
+### 3. Commit & Tag
 
 ```bash
 # Stage all relevant files
@@ -76,7 +57,7 @@ git commit -m "v{VERSION}: {Brief description of changes}"
 git tag v{VERSION}
 ```
 
-### 5. Push
+### 4. Push
 
 ```bash
 # Push to the specified remote (ask which one if not specified)
@@ -109,9 +90,7 @@ interview-mentor/
 ├── prisma/           # Database schema & migrations
 ├── docs/             # Additional documentation
 ├── public/           # Static assets
-├── DOCUMENTATION.md  # Full project documentation (keep updated!)
-├── README.md         # Project README (keep updated on push!)
-├── SPRINT2_PLAN.md   # Sprint 2 implementation plan
+├── README.md         # Project documentation (keep updated on push!)
 └── ai-settings.json  # AI model configuration
 ```
 

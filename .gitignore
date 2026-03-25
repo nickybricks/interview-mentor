@@ -49,3 +49,6 @@ dev.db-wal
 prisma/dev.db
 prisma/dev.db-shm
 prisma/dev.db-wal
+
+# Sprint plan
+SPRINT2_PLAN.md

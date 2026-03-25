@@ -247,37 +247,49 @@ export async function POST(request: NextRequest) {
             const boundModel = createBoundModel(interviewTools, chatOptions);
             const lcMessages = toLangChainMessages(messageHistory);
 
-            // Tool execution loop: invoke → check for tool calls → execute → re-invoke
+            // Tool execution loop: stream → check for tool calls → execute → re-stream
             let maxIterations = 5;
             while (maxIterations-- > 0) {
-              const response = await boundModel.invoke(lcMessages);
+              const stream = await boundModel.stream(lcMessages);
 
-              // Capture usage
-              if (response.usage_metadata) {
-                completionTokens += response.usage_metadata.output_tokens ?? 0;
-                promptTokens += response.usage_metadata.input_tokens ?? 0;
+              // Collect streamed chunks to detect tool calls
+              let collectedText = "";
+              let responseForHistory: import("@langchain/core/messages").AIMessageChunk | null = null;
+
+              for await (const chunk of stream) {
+                // Accumulate for history (concat chunks)
+                responseForHistory = responseForHistory
+                  ? responseForHistory.concat(chunk)
+                  : chunk;
+
+                // Capture usage from final chunk
+                if (chunk.usage_metadata) {
+                  completionTokens += chunk.usage_metadata.output_tokens ?? 0;
+                  promptTokens += chunk.usage_metadata.input_tokens ?? 0;
+                }
+
+                // Stream text content to client in real-time
+                const text = typeof chunk.content === "string" ? chunk.content : "";
+                if (text) {
+                  collectedText += text;
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ text })}\n\n`)
+                  );
+                }
               }
 
-              const toolCalls = response.tool_calls;
+              // Check if the full response has tool calls
+              const toolCalls = responseForHistory?.tool_calls;
               if (!toolCalls || toolCalls.length === 0) {
-                // No tool calls — stream the text content
-                const text = typeof response.content === "string" ? response.content : "";
-                if (text) {
-                  fullResponse = text;
-                  // Stream in chunks for a smoother UX
-                  const chunkSize = 20;
-                  for (let i = 0; i < text.length; i += chunkSize) {
-                    const chunk = text.slice(i, i + chunkSize);
-                    controller.enqueue(
-                      encoder.encode(`data: ${JSON.stringify({ text: chunk })}\n\n`)
-                    );
-                  }
+                // No tool calls — text was already streamed above
+                if (collectedText) {
+                  fullResponse = collectedText;
                 }
                 break;
               }
 
               // Execute each tool call
-              lcMessages.push(response);
+              lcMessages.push(responseForHistory!);
               for (const tc of toolCalls) {
                 // Notify frontend that tool is running
                 controller.enqueue(
