@@ -224,6 +224,7 @@ export const searchKnowledgeBase = tool(
 export const saveCoachingProfile = tool(
   async ({
     projectId,
+    chatId,
     targetRoles,
     seniorityBand,
     timeline,
@@ -309,6 +310,15 @@ export const saveCoachingProfile = tool(
         },
       });
 
+      // GUARD: Only mark chat as completed for kickoff chats
+      const chat = await prisma.chat.findUnique({ where: { id: chatId } });
+      if (chat?.type === "kickoff") {
+        await prisma.chat.update({
+          where: { id: chatId },
+          data: { status: "completed" },
+        });
+      }
+
       return JSON.stringify({
         success: true,
         message: "Coaching profile saved successfully.",
@@ -334,6 +344,7 @@ export const saveCoachingProfile = tool(
       "Save the candidate's coaching profile after the kickoff conversation. Call this once you have collected enough information (target roles, timeline, CV analysis, concerns). This persists the coaching state to the database for use in future preparation and mock interview sessions.",
     schema: z.object({
       projectId: z.string().describe("The project ID to save the coaching profile to"),
+      chatId: z.string().describe("The chat ID this tool is being called from"),
       targetRoles: z.array(z.string()).describe("Target role(s) the candidate is preparing for"),
       seniorityBand: z.string().nullable().optional().describe("Seniority level: 'early', 'mid', 'senior', or 'executive'"),
       timeline: z.string().nullable().optional().describe("Interview timeline: 'triage' (≤48h), 'focused' (1-2 weeks), or 'full' (3+ weeks)"),

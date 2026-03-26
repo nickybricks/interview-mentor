@@ -125,3 +125,34 @@ export async function DELETE(
     );
   }
 }
+
+// PATCH /api/chats/[id] - Update chat status
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const { id } = await params;
+    const { status } = await request.json();
+
+    if (status !== "active" && status !== "completed") {
+      return NextResponse.json(
+        { error: "Invalid status. Must be 'active' or 'completed'." },
+        { status: 400 }
+      );
+    }
+
+    const chat = await prisma.chat.update({
+      where: { id },
+      data: { status },
+    });
+
+    return NextResponse.json({ success: true, status: chat.status });
+  } catch (error) {
+    console.error("Failed to update chat:", error);
+    return NextResponse.json(
+      { error: "Failed to update chat" },
+      { status: 500 }
+    );
+  }
+}

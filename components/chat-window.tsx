@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 import { ToolCallCard, type ToolCallDisplay } from "@/components/tool-call-card";
+import { KickoffCompleteOverlay } from "@/components/kickoff-complete-overlay";
 
 interface RAGSourceDisplay {
   source: string;
@@ -55,6 +57,7 @@ interface ChatData {
   id: string;
   type: string;
   persona: string;
+  status: string;
   project: {
     id: string;
     name: string;
@@ -87,7 +90,9 @@ interface StagedFile {
 
 export function ChatWindow({ chatId }: ChatWindowProps) {
   const { t, locale } = useI18n();
+  const router = useRouter();
   const [chat, setChat] = useState<ChatData | null>(null);
+  const [kickoffComplete, setKickoffComplete] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [streaming, setStreaming] = useState(false);
@@ -104,6 +109,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
+  const kickoffSignalReceivedRef = useRef(false);
   const autoStartTriggered = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -124,6 +130,10 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
           const data: ChatData = await res.json();
           setChat(data);
           setMessages(data.messages.filter((m) => m.role !== "system"));
+          // Restore kickoff completion state for returning users
+          if (data.type === "kickoff" && data.status === "completed") {
+            setKickoffComplete(true);
+          }
         }
       } catch (err) {
         console.error("Failed to fetch chat:", err);
@@ -193,6 +203,10 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
                   collectedToolCalls.push(tc);
                 }
                 setActiveToolCalls([...collectedToolCalls]);
+                continue;
+              }
+              if (data.kickoff_complete) {
+                kickoffSignalReceivedRef.current = true;
                 continue;
               }
               if (data.sources) {
@@ -304,6 +318,12 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
       } finally {
         setStreaming(false);
         setStreamingContent("");
+        if (kickoffSignalReceivedRef.current) {
+          setTimeout(() => {
+            setKickoffComplete(true);
+            kickoffSignalReceivedRef.current = false;
+          }, 3000);
+        }
       }
     };
 
@@ -497,6 +517,12 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
       setStreamingContent("");
       setActiveToolCalls([]);
       textareaRef.current?.focus();
+      if (kickoffSignalReceivedRef.current) {
+        setTimeout(() => {
+          setKickoffComplete(true);
+          kickoffSignalReceivedRef.current = false;
+        }, 3000);
+      }
     }
   };
 
@@ -570,6 +596,12 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
       setStreaming(false);
       setStreamingContent("");
       setActiveToolCalls([]);
+      if (kickoffSignalReceivedRef.current) {
+        setTimeout(() => {
+          setKickoffComplete(true);
+          kickoffSignalReceivedRef.current = false;
+        }, 3000);
+      }
     }
   };
 
@@ -862,161 +894,204 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
         className="hidden"
       />
 
-      {/* Floating Input Island — fixed at bottom */}
-      <div className="absolute inset-x-0 bottom-0 px-4 pb-4 pt-2 bg-gradient-to-t from-background from-80% to-transparent">
-        <div className="mx-auto max-w-3xl">
-          <div className="rounded-2xl border bg-background shadow-lg">
-            {/* Staged file preview — above the input row */}
-            {stagedFile && (
-              <div className="flex items-center gap-2 border-b px-3 py-2">
-                <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-1.5 text-sm">
-                  <FileText className="size-4 shrink-0 text-red-600" />
-                  <span className="max-w-[200px] truncate font-medium">
-                    {stagedFile.file.name}
-                  </span>
-                  <span className="text-xs text-muted-foreground">
-                    ({stagedFile.label})
-                  </span>
-                  <button
-                    onClick={removeStagedFile}
-                    className="ml-1 rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
-                    aria-label={`Remove ${stagedFile.file.name}`}
-                  >
-                    <X className="size-3.5" />
-                  </button>
-                </div>
-              </div>
-            )}
+      {/* Bottom area: Kickoff overlay OR floating input */}
+      {kickoffComplete ? (
+        <KickoffCompleteOverlay
+          locale={locale as "de" | "en"}
+          onMoreQuestions={async () => {
+            await fetch(`/api/chats/${chatId}`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ status: "active" }),
+            });
+            setKickoffComplete(false);
+            kickoffSignalReceivedRef.current = false;
+          }}
+          onStartPrep={async () => {
+            const projectId = chat.project.id;
+            const res = await fetch(`/api/chats?projectId=${projectId}`);
+            if (res.ok) {
+              const chats = await res.json();
+              const existing = chats.find(
+                (c: { type: string; status: string }) =>
+                  c.type === "preparation" && c.status === "active"
+              );
+              if (existing) {
+                router.push(`/project/${projectId}/chat/${existing.id}`);
+                return;
+              }
+            }
+            const createRes = await fetch("/api/chats", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ projectId, type: "preparation" }),
+            });
+            if (createRes.ok) {
+              const newChat = await createRes.json();
+              router.push(`/project/${projectId}/chat/${newChat.id}`);
+            }
+          }}
+          onGoToDashboard={() => router.push(`/project/${chat.project.id}`)}
+        />
+      ) : (
+        <>
+          {/* Floating Input Island — fixed at bottom */}
+          <div className="absolute inset-x-0 bottom-0 px-4 pb-4 pt-2 bg-gradient-to-t from-background from-80% to-transparent">
+            <div className="mx-auto max-w-3xl">
+              <div className="rounded-2xl border bg-background shadow-lg">
+                {/* Staged file preview — above the input row */}
+                {stagedFile && (
+                  <div className="flex items-center gap-2 border-b px-3 py-2">
+                    <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-1.5 text-sm">
+                      <FileText className="size-4 shrink-0 text-red-600" />
+                      <span className="max-w-[200px] truncate font-medium">
+                        {stagedFile.file.name}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        ({stagedFile.label})
+                      </span>
+                      <button
+                        onClick={removeStagedFile}
+                        className="ml-1 rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                        aria-label={`Remove ${stagedFile.file.name}`}
+                      >
+                        <X className="size-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                )}
 
-            {/* Upload error */}
-            {uploadError && (
-              <div className="flex items-center gap-2 border-b px-3 py-2 text-xs text-destructive">
-                <AlertCircle className="size-3.5 shrink-0" />
-                <span>{uploadError}</span>
-                <button
-                  onClick={() => setUploadError(null)}
-                  className="ml-auto rounded p-0.5 hover:bg-destructive/10"
-                  aria-label="Dismiss"
-                >
-                  <X className="size-3" />
-                </button>
-              </div>
-            )}
-
-            {/* Input row */}
-            <div className="flex items-end gap-2 p-2">
-              {/* Upload button with menu */}
-              <div className="relative" ref={uploadMenuRef}>
-                <Button
-                  onClick={() => setUploadMenuOpen((o) => !o)}
-                  disabled={streaming || uploading}
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 rounded-xl"
-                  aria-label={t("chat.uploadFile")}
-                  aria-expanded={uploadMenuOpen}
-                >
-                  {uploading ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <Paperclip className="size-4" />
-                  )}
-                </Button>
-
-                {/* Upload type menu */}
-                {uploadMenuOpen && (
-                  <div className="absolute bottom-full left-0 mb-2 w-52 rounded-lg border bg-background p-1 shadow-lg">
+                {/* Upload error */}
+                {uploadError && (
+                  <div className="flex items-center gap-2 border-b px-3 py-2 text-xs text-destructive">
+                    <AlertCircle className="size-3.5 shrink-0" />
+                    <span>{uploadError}</span>
                     <button
-                      type="button"
-                      onClick={() => triggerFilePicker("cv")}
-                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
+                      onClick={() => setUploadError(null)}
+                      className="ml-auto rounded p-0.5 hover:bg-destructive/10"
+                      aria-label="Dismiss"
                     >
-                      <FileText className="size-4 text-blue-600" />
-                      {t("project.cvLabel")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => triggerFilePicker("jobDescription")}
-                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
-                    >
-                      <FileText className="size-4 text-amber-600" />
-                      {t("project.jobLabel")}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => triggerFilePicker("additional")}
-                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
-                    >
-                      <FileText className="size-4 text-muted-foreground" />
-                      {t("chat.additionalDoc")}
+                      <X className="size-3" />
                     </button>
                   </div>
                 )}
-              </div>
 
-              <Textarea
-                ref={textareaRef}
-                name="message"
-                autoComplete="off"
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder={
-                  stagedFile
-                    ? t("chat.placeholderWithFile")
-                    : t("chat.placeholder")
-                }
-                disabled={streaming || recording}
-                className="min-h-[44px] max-h-[200px] resize-none border-0 shadow-none focus-visible:ring-0 focus-visible:border-primary"
-                rows={1}
-              />
-              {/* Voice recording button */}
-              <Button
-                onClick={toggleRecording}
-                disabled={streaming || transcribing}
-                variant={recording ? "destructive" : "ghost"}
-                size="icon"
-                className={cn(
-                  "shrink-0 rounded-xl",
-                  recording && "animate-pulse"
-                )}
-                aria-label={recording ? t("chat.stopRecording") : t("chat.voiceInput")}
-              >
-                {transcribing ? (
-                  <Loader2 className="size-4 animate-spin" />
+                {/* Input row */}
+                <div className="flex items-end gap-2 p-2">
+                  {/* Upload button with menu */}
+                  <div className="relative" ref={uploadMenuRef}>
+                    <Button
+                      onClick={() => setUploadMenuOpen((o) => !o)}
+                      disabled={streaming || uploading}
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0 rounded-xl"
+                      aria-label={t("chat.uploadFile")}
+                      aria-expanded={uploadMenuOpen}
+                    >
+                      {uploading ? (
+                        <Loader2 className="size-4 animate-spin" />
+                      ) : (
+                        <Paperclip className="size-4" />
+                      )}
+                    </Button>
+
+                    {/* Upload type menu */}
+                    {uploadMenuOpen && (
+                      <div className="absolute bottom-full left-0 mb-2 w-52 rounded-lg border bg-background p-1 shadow-lg">
+                        <button
+                          type="button"
+                          onClick={() => triggerFilePicker("cv")}
+                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
+                        >
+                          <FileText className="size-4 text-blue-600" />
+                          {t("project.cvLabel")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => triggerFilePicker("jobDescription")}
+                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
+                        >
+                          <FileText className="size-4 text-amber-600" />
+                          {t("project.jobLabel")}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => triggerFilePicker("additional")}
+                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
+                        >
+                          <FileText className="size-4 text-muted-foreground" />
+                          {t("chat.additionalDoc")}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <Textarea
+                    ref={textareaRef}
+                    name="message"
+                    autoComplete="off"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyDown={handleKeyDown}
+                    placeholder={
+                      stagedFile
+                        ? t("chat.placeholderWithFile")
+                        : t("chat.placeholder")
+                    }
+                    disabled={streaming || recording}
+                    className="min-h-[44px] max-h-[200px] resize-none border-0 shadow-none focus-visible:ring-0 focus-visible:border-primary"
+                    rows={1}
+                  />
+                  {/* Voice recording button */}
+                  <Button
+                    onClick={toggleRecording}
+                    disabled={streaming || transcribing}
+                    variant={recording ? "destructive" : "ghost"}
+                    size="icon"
+                    className={cn(
+                      "shrink-0 rounded-xl",
+                      recording && "animate-pulse"
+                    )}
+                    aria-label={recording ? t("chat.stopRecording") : t("chat.voiceInput")}
+                  >
+                    {transcribing ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : recording ? (
+                      <Square className="size-3.5" />
+                    ) : (
+                      <Mic className="size-4" />
+                    )}
+                  </Button>
+                  {/* Send button */}
+                  <Button
+                    onClick={sendMessage}
+                    disabled={!canSend}
+                    size="icon"
+                    aria-label="Send message"
+                    className="shrink-0 rounded-xl"
+                  >
+                    {streaming || uploading ? (
+                      <Loader2 className="size-4 animate-spin" />
+                    ) : (
+                      <Send className="size-4" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+              <p className="mt-1 text-center text-[10px] text-muted-foreground" aria-live="polite">
+                {micError ? (
+                  <span className="text-destructive" role="alert">{micError}</span>
                 ) : recording ? (
-                  <Square className="size-3.5" />
+                  <span className="text-destructive">{t("chat.recordingActive")}</span>
                 ) : (
-                  <Mic className="size-4" />
+                  t("chat.inputHint")
                 )}
-              </Button>
-              {/* Send button */}
-              <Button
-                onClick={sendMessage}
-                disabled={!canSend}
-                size="icon"
-                aria-label="Send message"
-                className="shrink-0 rounded-xl"
-              >
-                {streaming || uploading ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <Send className="size-4" />
-                )}
-              </Button>
+              </p>
             </div>
           </div>
-          <p className="mt-1 text-center text-[10px] text-muted-foreground" aria-live="polite">
-            {micError ? (
-              <span className="text-destructive" role="alert">{micError}</span>
-            ) : recording ? (
-              <span className="text-destructive">{t("chat.recordingActive")}</span>
-            ) : (
-              t("chat.inputHint")
-            )}
-          </p>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }

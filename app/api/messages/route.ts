@@ -126,6 +126,17 @@ export async function POST(request: NextRequest) {
       systemPrompt = getDefaultSystemPrompt(featureKey);
     }
 
+    // For kickoff chats that were already completed: adjust prompt for follow-up questions
+    const isKickoffResumed = chat.type === "kickoff" && chat.status === "completed";
+    if (isKickoffResumed) {
+      systemPrompt += `\n\n## IMPORTANT: Kickoff Already Completed
+The kickoff session was already completed and the coaching profile was saved.
+The user has returned with a follow-up question.
+- Answer their question helpfully and concisely.
+- After answering, call save_coaching_profile again to persist any updates.
+- Keep your response focused — do not restart the full kickoff flow.`;
+    }
+
     // Add CV and job description context if available
     let contextInfo = "";
     if (chat.project.cvText) {
@@ -261,6 +272,7 @@ export async function POST(request: NextRequest) {
         const streamStartTime = Date.now();
         // Collect tool call results for the frontend
         const toolCallResults: { name: string; result: unknown }[] = [];
+        let kickoffCompleteSent = false;
 
         try {
           if (toolsEnabled) {
@@ -330,6 +342,7 @@ export async function POST(request: NextRequest) {
                 }
                 if (tc.name === "save_coaching_profile") {
                   args.projectId = chat.projectId;
+                  args.chatId = chatId;
                 }
 
                 // Find and execute the tool
@@ -360,6 +373,14 @@ export async function POST(request: NextRequest) {
                     `data: ${JSON.stringify({ toolCall: { name: tc.name, status: "done", result: parsedResult } })}\n\n`
                   )
                 );
+
+                // Send kickoff_complete signal (only once per response, only for kickoff chats)
+                if (tc.name === "save_coaching_profile" && chat.type === "kickoff" && !kickoffCompleteSent) {
+                  kickoffCompleteSent = true;
+                  controller.enqueue(
+                    encoder.encode(`data: ${JSON.stringify({ kickoff_complete: true })}\n\n`)
+                  );
+                }
 
                 // Add tool result as ToolMessage to conversation
                 const { ToolMessage } = await import("@langchain/core/messages");
