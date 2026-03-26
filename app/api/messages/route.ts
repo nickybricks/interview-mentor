@@ -312,13 +312,13 @@ export async function POST(request: NextRequest) {
 
                 // Inject projectId and jobDescription where needed
                 const args = { ...tc.args };
-                if (tc.name === "get_weak_areas" && !args.projectId) {
+                if (tc.name === "get_weak_areas") {
                   args.projectId = chat.projectId;
                 }
                 if (tc.name === "score_answer" && !args.jobDescription) {
                   args.jobDescription = chat.project.jobDescription ?? "";
                 }
-                if (tc.name === "save_coaching_profile" && !args.projectId) {
+                if (tc.name === "save_coaching_profile") {
                   args.projectId = chat.projectId;
                 }
 
