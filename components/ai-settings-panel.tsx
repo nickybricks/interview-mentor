@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
 
-type AIFeatureKey = "gap_analysis" | "preparation" | "mock_interview";
+type AIFeatureKey = "kickoff" | "gap_analysis" | "preparation" | "mock_interview";
 
 interface AIFeatureSettings {
   systemPrompt: string | null;
@@ -53,18 +53,21 @@ interface AIFeatureSettings {
 }
 
 interface AISettings {
+  kickoff: AIFeatureSettings;
   gap_analysis: AIFeatureSettings;
   preparation: AIFeatureSettings;
   mock_interview: AIFeatureSettings;
 }
 
-const FEATURE_LABEL_KEYS: Record<AIFeatureKey, "feature.gap_analysis" | "feature.preparation" | "feature.mock_interview"> = {
+const FEATURE_LABEL_KEYS: Record<AIFeatureKey, "feature.kickoff" | "feature.gap_analysis" | "feature.preparation" | "feature.mock_interview"> = {
+  kickoff: "feature.kickoff",
   gap_analysis: "feature.gap_analysis",
   preparation: "feature.preparation",
   mock_interview: "feature.mock_interview",
 };
 
 const FEATURE_COLORS: Record<AIFeatureKey, string> = {
+  kickoff: "bg-purple-500",
   gap_analysis: "bg-amber-500",
   preparation: "bg-blue-500",
   mock_interview: "bg-emerald-500",

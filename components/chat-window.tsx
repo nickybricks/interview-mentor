@@ -15,6 +15,10 @@ import {
   Mic,
   Square,
   Bot,
+  Paperclip,
+  FileText,
+  AlertCircle,
+  X,
 } from "lucide-react";
 import { ToolCallCard, type ToolCallDisplay } from "@/components/tool-call-card";
 
@@ -44,6 +48,7 @@ interface Message {
   versionTotal?: number;
   sources?: RAGSourceDisplay[];
   toolCalls?: ToolCallDisplay[];
+  attachment?: { name: string; type: string };
 }
 
 interface ChatData {
@@ -60,6 +65,7 @@ interface ChatData {
 }
 
 const CHAT_TYPE_ICONS: Record<string, React.ElementType> = {
+  kickoff: Bot,
   preparation: GraduationCap,
   gap_analysis: Search,
   mock_interview: Mic,
@@ -70,7 +76,14 @@ interface ChatWindowProps {
 }
 
 // Chat types that should auto-start with a bot intro message
-const AUTO_START_TYPES = ["preparation", "mock_interview"];
+const AUTO_START_TYPES = ["preparation", "mock_interview", "kickoff"];
+
+// Staged file waiting to be sent with the next message
+interface StagedFile {
+  file: File;
+  uploadType: "cv" | "jobDescription" | "additional";
+  label: string;
+}
 
 export function ChatWindow({ chatId }: ChatWindowProps) {
   const { t, locale } = useI18n();
@@ -84,9 +97,19 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
   const [transcribing, setTranscribing] = useState(false);
   const [micError, setMicError] = useState<string | null>(null);
   const [activeToolCalls, setActiveToolCalls] = useState<ToolCallDisplay[]>([]);
+
+  // File upload state
+  const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
+  const [stagedFile, setStagedFile] = useState<StagedFile | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
   const autoStartTriggered = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadTypeRef = useRef<"cv" | "jobDescription" | "additional">("cv");
+  const uploadMenuRef = useRef<HTMLDivElement>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -287,20 +310,130 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     triggerIntro();
   }, [chat, loading, streaming, messages.length, chatId, t]);
 
-  // Send message with streaming
+  // ─── File upload: stage → send ───────────────────────────────────────────
+
+  // Close upload menu on click outside
+  useEffect(() => {
+    if (!uploadMenuOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (uploadMenuRef.current && !uploadMenuRef.current.contains(e.target as Node)) {
+        setUploadMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [uploadMenuOpen]);
+
+  const typeLabels: Record<string, string> = {
+    cv: t("project.cvLabel"),
+    jobDescription: t("project.jobLabel"),
+    additional: t("chat.additionalDoc"),
+  };
+
+  // Open file picker for a specific type
+  const triggerFilePicker = (type: "cv" | "jobDescription" | "additional") => {
+    uploadTypeRef.current = type;
+    setUploadMenuOpen(false);
+    fileInputRef.current?.click();
+  };
+
+  // Stage the selected file (don't upload yet)
+  const handleFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    if (file.type !== "application/pdf") {
+      setUploadError(t("fileUpload.pdfOnly"));
+      setTimeout(() => setUploadError(null), 5000);
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError(t("fileUpload.tooLarge"));
+      setTimeout(() => setUploadError(null), 5000);
+      return;
+    }
+
+    setUploadError(null);
+    setStagedFile({
+      file,
+      uploadType: uploadTypeRef.current,
+      label: typeLabels[uploadTypeRef.current] || file.name,
+    });
+    textareaRef.current?.focus();
+  };
+
+  const removeStagedFile = () => {
+    setStagedFile(null);
+  };
+
+  // Upload the staged file to the server — returns true on success
+  const uploadStagedFile = async (): Promise<boolean> => {
+    if (!stagedFile || !chat) return true; // nothing to upload
+
+    setUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", stagedFile.file);
+      formData.append("projectId", chat.project.id);
+      formData.append("type", stagedFile.uploadType);
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || t("fileUpload.failed"));
+      }
+
+      return true;
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : t("fileUpload.failed"));
+      setTimeout(() => setUploadError(null), 5000);
+      return false;
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  // ─── Send message ────────────────────────────────────────────────────────
+
   const sendMessage = async () => {
+    // Allow sending with just a file (no text) or just text (no file)
     const text = input.trim();
-    if (!text || streaming) return;
+    if (!text && !stagedFile) return;
+    if (streaming || uploading) return;
+
+    // If there's a staged file, upload it first
+    const currentStaged = stagedFile;
+    if (currentStaged) {
+      const ok = await uploadStagedFile();
+      if (!ok) return; // upload failed, don't send
+      setStagedFile(null);
+    }
+
+    // Build the message content — no emoji suffix since attachment renders visually
+    const messageContent = text
+      ? text
+      : `Uploaded ${currentStaged!.label}: ${currentStaged!.file.name}`;
 
     // Optimistic update — add user message immediately
     const userMessage: Message = {
       id: `temp-${Date.now()}`,
       role: "user",
-      content: text,
+      content: messageContent,
       score: null,
       category: null,
       createdAt: new Date().toISOString(),
-      tokens: Math.ceil(text.length / 4), // rough estimate
+      tokens: Math.ceil(messageContent.length / 4),
+      ...(currentStaged && {
+        attachment: {
+          name: currentStaged.file.name,
+          type: currentStaged.uploadType,
+        },
+      }),
     };
     setMessages((prev) => [...prev, userMessage]);
     setInput("");
@@ -313,7 +446,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           chatId,
-          content: text,
+          content: messageContent,
         }),
       });
 
@@ -348,7 +481,6 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
       }
     } catch (err) {
       console.error("Send failed:", err);
-      // Add error message
       setMessages((prev) => [
         ...prev,
         {
@@ -601,9 +733,11 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     );
   }
 
-  const chatTypeKey = `chatType.${chat.type}` as "chatType.preparation" | "chatType.gap_analysis" | "chatType.mock_interview";
+  const chatTypeKey = `chatType.${chat.type}` as "chatType.kickoff" | "chatType.preparation" | "chatType.gap_analysis" | "chatType.mock_interview";
   const chatLabel = t(chatTypeKey) || chat.type;
   const TypeIcon = CHAT_TYPE_ICONS[chat.type] || GraduationCap;
+
+  const canSend = (input.trim() || stagedFile) && !streaming && !uploading;
 
   return (
     <div className="relative flex h-full flex-col">
@@ -675,6 +809,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
                 }
                 sources={msg.sources}
                 toolCalls={msg.toolCalls}
+                attachment={msg.attachment}
               />
             );
           })}
@@ -718,56 +853,158 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
         </div>
       </div>
 
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf"
+        onChange={handleFileSelected}
+        className="hidden"
+      />
+
       {/* Floating Input Island — fixed at bottom */}
       <div className="absolute inset-x-0 bottom-0 px-4 pb-4 pt-2 bg-gradient-to-t from-background from-80% to-transparent">
         <div className="mx-auto max-w-3xl">
-          <div className="flex items-end gap-2 rounded-2xl border bg-background p-2 shadow-lg">
-            <Textarea
-              ref={textareaRef}
-              name="message"
-              autoComplete="off"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder={t("chat.placeholder")}
-              disabled={streaming || recording}
-              className="min-h-[44px] max-h-[200px] resize-none border-0 shadow-none focus-visible:ring-0 focus-visible:border-primary"
-              rows={1}
-            />
-            {/* Voice recording button */}
-            <Button
-              onClick={toggleRecording}
-              disabled={streaming || transcribing}
-              variant={recording ? "destructive" : "ghost"}
-              size="icon"
-              className={cn(
-                "shrink-0 rounded-xl",
-                recording && "animate-pulse"
-              )}
-              aria-label={recording ? t("chat.stopRecording") : t("chat.voiceInput")}
-            >
-              {transcribing ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : recording ? (
-                <Square className="size-3.5" />
-              ) : (
-                <Mic className="size-4" />
-              )}
-            </Button>
-            {/* Send button */}
-            <Button
-              onClick={sendMessage}
-              disabled={!input.trim() || streaming}
-              size="icon"
-              aria-label="Send message"
-              className="shrink-0 rounded-xl"
-            >
-              {streaming ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Send className="size-4" />
-              )}
-            </Button>
+          <div className="rounded-2xl border bg-background shadow-lg">
+            {/* Staged file preview — above the input row */}
+            {stagedFile && (
+              <div className="flex items-center gap-2 border-b px-3 py-2">
+                <div className="flex items-center gap-2 rounded-lg bg-muted px-3 py-1.5 text-sm">
+                  <FileText className="size-4 shrink-0 text-red-600" />
+                  <span className="max-w-[200px] truncate font-medium">
+                    {stagedFile.file.name}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    ({stagedFile.label})
+                  </span>
+                  <button
+                    onClick={removeStagedFile}
+                    className="ml-1 rounded-full p-0.5 text-muted-foreground transition-colors hover:bg-background hover:text-foreground"
+                    aria-label={`Remove ${stagedFile.file.name}`}
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Upload error */}
+            {uploadError && (
+              <div className="flex items-center gap-2 border-b px-3 py-2 text-xs text-destructive">
+                <AlertCircle className="size-3.5 shrink-0" />
+                <span>{uploadError}</span>
+                <button
+                  onClick={() => setUploadError(null)}
+                  className="ml-auto rounded p-0.5 hover:bg-destructive/10"
+                  aria-label="Dismiss"
+                >
+                  <X className="size-3" />
+                </button>
+              </div>
+            )}
+
+            {/* Input row */}
+            <div className="flex items-end gap-2 p-2">
+              {/* Upload button with menu */}
+              <div className="relative" ref={uploadMenuRef}>
+                <Button
+                  onClick={() => setUploadMenuOpen((o) => !o)}
+                  disabled={streaming || uploading}
+                  variant="ghost"
+                  size="icon"
+                  className="shrink-0 rounded-xl"
+                  aria-label={t("chat.uploadFile")}
+                  aria-expanded={uploadMenuOpen}
+                >
+                  {uploading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Paperclip className="size-4" />
+                  )}
+                </Button>
+
+                {/* Upload type menu */}
+                {uploadMenuOpen && (
+                  <div className="absolute bottom-full left-0 mb-2 w-52 rounded-lg border bg-background p-1 shadow-lg">
+                    <button
+                      type="button"
+                      onClick={() => triggerFilePicker("cv")}
+                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
+                    >
+                      <FileText className="size-4 text-blue-600" />
+                      {t("project.cvLabel")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => triggerFilePicker("jobDescription")}
+                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
+                    >
+                      <FileText className="size-4 text-amber-600" />
+                      {t("project.jobLabel")}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => triggerFilePicker("additional")}
+                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-muted"
+                    >
+                      <FileText className="size-4 text-muted-foreground" />
+                      {t("chat.additionalDoc")}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              <Textarea
+                ref={textareaRef}
+                name="message"
+                autoComplete="off"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={handleKeyDown}
+                placeholder={
+                  stagedFile
+                    ? t("chat.placeholderWithFile")
+                    : t("chat.placeholder")
+                }
+                disabled={streaming || recording}
+                className="min-h-[44px] max-h-[200px] resize-none border-0 shadow-none focus-visible:ring-0 focus-visible:border-primary"
+                rows={1}
+              />
+              {/* Voice recording button */}
+              <Button
+                onClick={toggleRecording}
+                disabled={streaming || transcribing}
+                variant={recording ? "destructive" : "ghost"}
+                size="icon"
+                className={cn(
+                  "shrink-0 rounded-xl",
+                  recording && "animate-pulse"
+                )}
+                aria-label={recording ? t("chat.stopRecording") : t("chat.voiceInput")}
+              >
+                {transcribing ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : recording ? (
+                  <Square className="size-3.5" />
+                ) : (
+                  <Mic className="size-4" />
+                )}
+              </Button>
+              {/* Send button */}
+              <Button
+                onClick={sendMessage}
+                disabled={!canSend}
+                size="icon"
+                aria-label="Send message"
+                className="shrink-0 rounded-xl"
+              >
+                {streaming || uploading ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Send className="size-4" />
+                )}
+              </Button>
+            </div>
           </div>
           <p className="mt-1 text-center text-[10px] text-muted-foreground" aria-live="polite">
             {micError ? (

@@ -42,18 +42,21 @@ import {
   Info,
   LogOut,
   Check,
+  Bot,
 } from "lucide-react";
 import { NewProjectDialog } from "@/components/new-project-dialog";
 import { useI18n, type Locale } from "@/lib/i18n";
 import type { Project } from "@/app/project/layout";
 
 const CHAT_TYPE_ICONS: Record<string, React.ElementType> = {
+  kickoff: Bot,
   preparation: GraduationCap,
   gap_analysis: Search,
   mock_interview: Mic,
 };
 
 const CHAT_TYPE_COLORS: Record<string, string> = {
+  kickoff: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
   preparation: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
   gap_analysis: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
   mock_interview: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
@@ -142,7 +145,7 @@ export function Sidebar({ projects, onProjectsChange, onCollapse }: SidebarProps
   };
 
   const getChatLabel = (type: string) => {
-    const key = `chatType.${type}` as "chatType.preparation" | "chatType.gap_analysis" | "chatType.mock_interview";
+    const key = `chatType.${type}` as "chatType.kickoff" | "chatType.preparation" | "chatType.gap_analysis" | "chatType.mock_interview";
     return t(key) || type;
   };
 

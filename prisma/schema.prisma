@@ -15,6 +15,7 @@ model Project {
   cvText          String?
   jobDescription  String?
   gapAnalysis     String?
+  coachingState   Json?
   overallScore    Float?           @default(0)
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt

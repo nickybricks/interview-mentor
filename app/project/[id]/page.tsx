@@ -26,6 +26,7 @@ import {
   Download,
   Loader2,
   ChevronDown,
+  Bot,
 } from "lucide-react";
 
 interface ProjectDetail {
@@ -217,7 +218,20 @@ export default function ProjectPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              {/* Kickoff */}
+              <button
+                type="button"
+                onClick={() => startChat("kickoff")}
+                className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <Bot className="size-8 text-purple-600" />
+                <span className="font-medium">{t("chatType.kickoff")}</span>
+                <span className="text-xs text-muted-foreground">
+                  {t("project.kickoffDesc")}
+                </span>
+              </button>
+
               {/* Gap Analysis */}
               <button
                 type="button"

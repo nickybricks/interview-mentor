@@ -20,6 +20,11 @@ interface RAGSourceDisplay {
   preview: string;
 }
 
+interface AttachmentDisplay {
+  name: string;
+  type: string;
+}
+
 interface MessageBubbleProps {
   role: "user" | "assistant";
   content: string;
@@ -41,6 +46,7 @@ interface MessageBubbleProps {
   onVersionChange?: (direction: "prev" | "next") => void;
   sources?: RAGSourceDisplay[];
   toolCalls?: ToolCallDisplay[];
+  attachment?: AttachmentDisplay;
 }
 
 function fmtNum(n: number, locale: string): string {
@@ -82,6 +88,7 @@ export const MessageBubble = memo(function MessageBubble({
   onVersionChange,
   sources,
   toolCalls,
+  attachment,
 }: MessageBubbleProps) {
   const { t, locale } = useI18n();
   const [sourcesExpanded, setSourcesExpanded] = useState(false);
@@ -134,13 +141,28 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         )}
 
+        {/* Attachment card (user messages with file) */}
+        {isUser && attachment && (
+          <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 dark:border-red-900/40 dark:bg-red-950/30">
+            <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/40">
+              <FileText className="size-5 text-red-600 dark:text-red-400" />
+            </div>
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-foreground">
+                {attachment.name}
+              </p>
+              <p className="text-xs text-muted-foreground uppercase">PDF</p>
+            </div>
+          </div>
+        )}
+
         {/* Content bubble */}
         <div
           className={`rounded-2xl px-4 py-2.5 ${
             isUser
               ? "bg-primary text-primary-foreground"
               : "bg-muted"
-          }`}
+          } ${isUser && !content ? "hidden" : ""}`}
         >
           {isUser ? (
             <p className="whitespace-pre-wrap text-sm">{content}</p>

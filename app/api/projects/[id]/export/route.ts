@@ -78,6 +78,90 @@ export async function GET(
     md += `**${t(locale, "export.overallScore")}:** ${avgScore}/10\n`;
     md += `\n---\n\n`;
 
+    // Coaching Profile
+    if (project.coachingState && typeof project.coachingState === "object") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const state = project.coachingState as any;
+      md += `## ${t(locale, "export.coachingProfile")}\n\n`;
+
+      // Profile
+      const profile = state.profile;
+      if (profile) {
+        if (profile.targetRoles?.length > 0)
+          md += `**Target Roles:** ${profile.targetRoles.join(", ")}\n`;
+        if (profile.seniorityBand)
+          md += `**Seniority:** ${profile.seniorityBand}\n`;
+        if (profile.coachingMode)
+          md += `**Coaching Mode:** ${profile.coachingMode}\n`;
+        if (profile.biggestConcern)
+          md += `**Biggest Concern:** ${profile.biggestConcern}\n`;
+        if (profile.interviewHistory)
+          md += `**Interview History:** ${profile.interviewHistory}\n`;
+        if (profile.careerTransition?.detected)
+          md += `**Career Transition:** ${profile.careerTransition.type ?? "detected"}\n`;
+        md += "\n";
+      }
+
+      // Resume Analysis
+      const resume = state.resumeAnalysis;
+      if (resume) {
+        if (resume.positioningStrengths?.length > 0) {
+          md += "### Positioning Strengths\n";
+          for (const s of resume.positioningStrengths) md += `- ${s}\n`;
+          md += "\n";
+        }
+        if (resume.interviewerConcerns?.length > 0) {
+          md += "### Interviewer Concerns\n";
+          for (const c of resume.interviewerConcerns) md += `- ${c}\n`;
+          md += "\n";
+        }
+        if (resume.careerNarrativeGaps?.length > 0) {
+          md += "### Career Narrative Gaps\n";
+          for (const g of resume.careerNarrativeGaps) md += `- ${g}\n`;
+          md += "\n";
+        }
+        if (resume.storySeeds?.length > 0) {
+          md += "### Story Seeds\n";
+          for (const seed of resume.storySeeds) {
+            md += `- ${seed.resumeBullet}`;
+            if (seed.suggestedThemes?.length > 0)
+              md += ` *(${seed.suggestedThemes.join(", ")})*`;
+            md += "\n";
+          }
+          md += "\n";
+        }
+      }
+
+      // Readiness Assessment
+      const readiness = state.readinessAssessment;
+      if (readiness?.level) {
+        md += "### Readiness Assessment\n";
+        md += `- **Level:** ${readiness.level}\n`;
+        if (readiness.biggestRisk) md += `- **Biggest Risk:** ${readiness.biggestRisk}\n`;
+        if (readiness.biggestAsset) md += `- **Biggest Asset:** ${readiness.biggestAsset}\n`;
+        md += "\n";
+      }
+
+      // Coaching Strategy
+      const strategy = state.coachingStrategy;
+      if (strategy?.priorities?.length > 0) {
+        md += "### Coaching Strategy\n";
+        md += "**Priorities:**\n";
+        for (const p of strategy.priorities) md += `1. ${p}\n`;
+        if (strategy.focusAreas?.length > 0)
+          md += `\n**Focus Areas:** ${strategy.focusAreas.join(", ")}\n`;
+        md += "\n";
+      }
+
+      // Coaching Notes
+      if (state.coachingNotes) {
+        md += "### Coaching Notes\n";
+        md += `${state.coachingNotes}\n\n`;
+      }
+
+      md += `---\n\n`;
+    }
+
     // Gap Analysis
     if (project.gapAnalysis) {
       md += `## ${t(locale, "export.gapAnalysis")}\n\n${project.gapAnalysis}\n\n---\n\n`;
@@ -96,6 +180,7 @@ export async function GET(
 
     // Chat Transcripts
     const chatTypeLabels: Record<string, string> = {
+      kickoff: t(locale, "export.kickoff"),
       preparation: t(locale, "export.preparation"),
       gap_analysis: t(locale, "export.gapAnalysisChat"),
       mock_interview: t(locale, "export.mockInterview"),

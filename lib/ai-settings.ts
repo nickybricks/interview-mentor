@@ -1,12 +1,13 @@
 import {
   GAP_ANALYSIS_PROMPT,
   MOCK_INTERVIEW_PROMPT,
+  KICKOFF_SYSTEM_PROMPT,
   PROMPTS,
   DEFAULT_PROMPT,
 } from "./prompts";
 import { prisma } from "./db";
 
-export type AIFeatureKey = "gap_analysis" | "preparation" | "mock_interview";
+export type AIFeatureKey = "gap_analysis" | "preparation" | "mock_interview" | "kickoff";
 
 export interface AIFeatureSettings {
   systemPrompt: string | null; // null = use default from prompts.ts
@@ -23,6 +24,7 @@ export interface AISettings {
   gap_analysis: AIFeatureSettings;
   preparation: AIFeatureSettings;
   mock_interview: AIFeatureSettings;
+  kickoff: AIFeatureSettings;
 }
 
 export function getDefaultSystemPrompt(feature: AIFeatureKey): string {
@@ -31,6 +33,8 @@ export function getDefaultSystemPrompt(feature: AIFeatureKey): string {
       return GAP_ANALYSIS_PROMPT;
     case "mock_interview":
       return MOCK_INTERVIEW_PROMPT;
+    case "kickoff":
+      return KICKOFF_SYSTEM_PROMPT;
     case "preparation":
       return PROMPTS[DEFAULT_PROMPT];
   }
@@ -51,6 +55,7 @@ export function createDefaultSettings(): AISettings {
     gap_analysis: { ...base, temperature: 0.3 },
     preparation: { ...base },
     mock_interview: { ...base },
+    kickoff: { ...base },
   };
 }
 
@@ -66,6 +71,7 @@ export async function readSettings(): Promise<AISettings> {
       gap_analysis: { ...defaults.gap_analysis, ...(parsed.gap_analysis as Partial<AIFeatureSettings>) },
       preparation: { ...defaults.preparation, ...(parsed.preparation as Partial<AIFeatureSettings>) },
       mock_interview: { ...defaults.mock_interview, ...(parsed.mock_interview as Partial<AIFeatureSettings>) },
+      kickoff: { ...defaults.kickoff, ...(parsed.kickoff as Partial<AIFeatureSettings>) },
     };
   } catch {
     return defaults;

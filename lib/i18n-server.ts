@@ -15,6 +15,7 @@ export const translations = {
     "sidebar.noChats": "Keine Chats",
 
     // Chat types
+    "chatType.kickoff": "Kickoff",
     "chatType.preparation": "Vorbereitung",
     "chatType.gap_analysis": "Gap-Analyse",
     "chatType.mock_interview": "Mock-Interview",
@@ -59,6 +60,7 @@ export const translations = {
     "aiSettings.save": "Einstellungen speichern",
 
     // Feature labels
+    "feature.kickoff": "Kickoff",
     "feature.gap_analysis": "Gap-Analyse",
     "feature.preparation": "Vorbereitung",
     "feature.mock_interview": "Mock-Interview",
@@ -91,6 +93,9 @@ export const translations = {
     "chat.voiceInput": "Spracheingabe",
     "chat.recordingActive": "Aufnahme läuft... Klicke zum Stoppen",
     "chat.inputHint": "Enter = Senden \u00b7 Shift+Enter = Neue Zeile",
+    "chat.uploadFile": "Datei hochladen",
+    "chat.additionalDoc": "Weiteres Dokument",
+    "chat.placeholderWithFile": "Nachricht hinzufügen (optional)...",
 
     // Project Page
     "project.loading": "Laden...",
@@ -108,6 +113,7 @@ export const translations = {
     "project.categories": "Kategorien",
     "project.coaching": "Coaching starten",
     "project.coachingDesc": "Wähle eine Session-Art, um mit deiner Vorbereitung zu beginnen.",
+    "project.kickoffDesc": "Coaching-Profil aufbauen",
     "project.cvRequired": "CV + Stellenanzeige erforderlich",
     "project.gapCompare": "CV vs. Stellenanzeige vergleichen",
     "project.prepQuestions": "Übungsfragen mit Feedback",
@@ -180,6 +186,8 @@ export const translations = {
     "export.questions": "Fragen",
     "export.you": "Du",
     "export.coach": "Coach",
+    "export.kickoff": "Kickoff",
+    "export.coachingProfile": "Coaching-Profil",
     "export.preparation": "Vorbereitung",
     "export.gapAnalysisChat": "Gap-Analyse",
     "export.mockInterview": "Mock Interview",
@@ -196,6 +204,7 @@ export const translations = {
     "sidebar.noChats": "No chats",
 
     // Chat types
+    "chatType.kickoff": "Kickoff",
     "chatType.preparation": "Preparation",
     "chatType.gap_analysis": "Gap Analysis",
     "chatType.mock_interview": "Mock Interview",
@@ -240,6 +249,7 @@ export const translations = {
     "aiSettings.save": "Save settings",
 
     // Feature labels
+    "feature.kickoff": "Kickoff",
     "feature.gap_analysis": "Gap Analysis",
     "feature.preparation": "Preparation",
     "feature.mock_interview": "Mock Interview",
@@ -272,6 +282,9 @@ export const translations = {
     "chat.voiceInput": "Voice input",
     "chat.recordingActive": "Recording... Click to stop",
     "chat.inputHint": "Enter = Send \u00b7 Shift+Enter = New line",
+    "chat.uploadFile": "Upload file",
+    "chat.additionalDoc": "Additional document",
+    "chat.placeholderWithFile": "Add a message (optional)...",
 
     // Project Page
     "project.loading": "Loading...",
@@ -289,6 +302,7 @@ export const translations = {
     "project.categories": "Categories",
     "project.coaching": "Start Coaching",
     "project.coachingDesc": "Choose a session type to start your preparation.",
+    "project.kickoffDesc": "Build your coaching profile",
     "project.cvRequired": "CV + job posting required",
     "project.gapCompare": "Compare CV vs. job posting",
     "project.prepQuestions": "Practice questions with feedback",
@@ -361,6 +375,8 @@ export const translations = {
     "export.questions": "Questions",
     "export.you": "You",
     "export.coach": "Coach",
+    "export.kickoff": "Kickoff",
+    "export.coachingProfile": "Coaching Profile",
     "export.preparation": "Preparation",
     "export.gapAnalysisChat": "Gap Analysis",
     "export.mockInterview": "Mock Interview",

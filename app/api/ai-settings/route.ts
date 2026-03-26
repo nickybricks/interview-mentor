@@ -17,6 +17,7 @@ export async function PUT(request: NextRequest) {
     gap_analysis: { ...current.gap_analysis, ...body.gap_analysis },
     preparation: { ...current.preparation, ...body.preparation },
     mock_interview: { ...current.mock_interview, ...body.mock_interview },
+    kickoff: { ...current.kickoff, ...body.kickoff },
   };
   await writeSettings(merged);
   return NextResponse.json(merged);

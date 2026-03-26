@@ -66,7 +66,12 @@ export function NewProjectDialog({
       setPosition("");
       onOpenChange(false);
       onCreated();
-      router.push(`/project/${project.id}`);
+      // Redirect to the auto-created kickoff chat
+      if (project.kickoffChatId) {
+        router.push(`/project/${project.id}/chat/${project.kickoffChatId}`);
+      } else {
+        router.push(`/project/${project.id}`);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : t("newProject.genericError"));
     } finally {

@@ -10,6 +10,7 @@ import {
   PROMPTS,
   DEFAULT_PROMPT,
   type PromptKey,
+  buildCoachingContext,
 } from "@/lib/prompts";
 import {
   readSettings,
@@ -24,7 +25,7 @@ import {
   retrieveWithQueryTranslation,
   type RAGSource,
 } from "@/lib/rag";
-import { interviewTools } from "@/lib/tools";
+import { interviewTools, kickoffTools } from "@/lib/tools";
 import { getModelPricing } from "@/lib/model-pricing";
 
 // POST /api/messages - Send a message and get AI response (streaming)
@@ -135,7 +136,7 @@ export async function POST(request: NextRequest) {
     }
 
     // RAG: Retrieve relevant context for preparation and mock_interview chats
-    const RAG_ENABLED_TYPES = ["preparation", "mock_interview"];
+    const RAG_ENABLED_TYPES = ["preparation", "mock_interview", "kickoff"];
     let ragSources: RAGSource[] = [];
     let ragContext = "";
     const userQuery = isAutoStart ? "" : isRegenerate ? "" : sanitizedContent;
@@ -153,7 +154,16 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Build full system prompt: base + CV/JD context + RAG context
+    // Inject coaching context for downstream chats (preparation, mock_interview)
+    const COACHING_CONTEXT_TYPES = ["preparation", "mock_interview"];
+    if (COACHING_CONTEXT_TYPES.includes(chat.type) && chat.project.coachingState) {
+      const coachingContext = buildCoachingContext(chat.project.coachingState);
+      if (coachingContext) {
+        contextInfo = coachingContext + contextInfo;
+      }
+    }
+
+    // Build full system prompt: base + coaching context + CV/JD context + RAG context
     let fullSystemPrompt = systemPrompt + contextInfo;
     if (ragContext) {
       fullSystemPrompt += `\n\n## Relevant Context\nThe following excerpts were retrieved from the knowledge base and uploaded documents. Use them to inform your response when relevant:\n\n${ragContext}`;
@@ -186,6 +196,8 @@ export async function POST(request: NextRequest) {
     if (isAutoStart) {
       // Hidden intro trigger — not saved to DB, just sent to the AI
       const introPrompts: Record<string, string> = {
+        kickoff:
+          "Please introduce yourself as Interview Mentor, the candidate’s personal interview coach. Warmly welcome them and explain that this is the kickoff session where you’ll get to know them and build a personalized coaching plan. Then ask your first question: What role or roles are you preparing for?",
         preparation:
           "Please introduce yourself as my interview coach. Briefly introduce yourself, explain how the preparation session will work (that you will ask me interview questions, assess my answers and give me feedback), and ask me if I’m ready to begin. Keep it brief and encouraging.",
         mock_interview:
@@ -217,8 +229,8 @@ export async function POST(request: NextRequest) {
 
     const modelUsed = featureSettings.model;
 
-    // Determine if tools should be available (only for preparation chats)
-    const TOOL_ENABLED_TYPES = ["preparation"];
+    // Determine if tools should be available (preparation and kickoff chats)
+    const TOOL_ENABLED_TYPES = ["preparation", "kickoff"];
     const toolsEnabled = TOOL_ENABLED_TYPES.includes(chat.type) && !isAutoStart;
 
     const chatOptions = {
@@ -243,7 +255,8 @@ export async function POST(request: NextRequest) {
         try {
           if (toolsEnabled) {
             // ─── Tool-calling path ──────────────────────────────────────
-            const boundModel = createBoundModel(interviewTools, chatOptions);
+            const activeTools = chat.type === "kickoff" ? kickoffTools : interviewTools;
+            const boundModel = createBoundModel(activeTools, chatOptions);
             const lcMessages = toLangChainMessages(messageHistory);
 
             // Tool execution loop: stream → check for tool calls → execute → re-stream
@@ -305,9 +318,12 @@ export async function POST(request: NextRequest) {
                 if (tc.name === "score_answer" && !args.jobDescription) {
                   args.jobDescription = chat.project.jobDescription ?? "";
                 }
+                if (tc.name === "save_coaching_profile" && !args.projectId) {
+                  args.projectId = chat.projectId;
+                }
 
                 // Find and execute the tool
-                const toolDef = interviewTools.find((t) => t.name === tc.name);
+                const toolDef = activeTools.find((t) => t.name === tc.name);
                 let toolResult = "";
                 if (toolDef) {
                   try {

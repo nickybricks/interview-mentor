@@ -7,6 +7,7 @@ import {
 } from "@langchain/core/messages";
 import { prisma } from "@/lib/db";
 import { retrieveContext } from "@/lib/vectorstore";
+import { createInitialCoachingState } from "@/lib/coaching-state";
 
 // ─── Tool 1: score_answer ───────────────────────────────────────────────────
 
@@ -218,6 +219,186 @@ export const searchKnowledgeBase = tool(
   }
 );
 
+// ─── Tool 4: save_coaching_profile ───────────────────────────────────────────
+
+export const saveCoachingProfile = tool(
+  async ({
+    projectId,
+    targetRoles,
+    seniorityBand,
+    timeline,
+    timelineDate,
+    coachingMode,
+    feedbackDirectness,
+    interviewHistory,
+    interviewHistoryType,
+    biggestConcern,
+    anxietyProfile,
+    careerTransition,
+    transitionNarrativeStatus,
+    positioningStrengths,
+    interviewerConcerns,
+    careerNarrativeGaps,
+    storySeeds,
+    targetRealityCheck,
+    readinessAssessment,
+    coachingStrategy,
+    coachingNotes,
+  }) => {
+    try {
+      const coachingState = createInitialCoachingState({
+        targetRoles,
+        seniorityBand: seniorityBand as "early" | "mid" | "senior" | "executive" | null ?? null,
+        timeline: timeline as "triage" | "focused" | "full" | null ?? null,
+        timelineDate: timelineDate ?? null,
+        coachingMode: coachingMode as "triage" | "focused" | "full" | null ?? null,
+        feedbackDirectness: feedbackDirectness as "gentle" | "balanced" | "direct" | null ?? null,
+        interviewHistory: interviewHistory ?? null,
+        interviewHistoryType: interviewHistoryType as "first_time" | "active" | "rusty" | null ?? null,
+        biggestConcern: biggestConcern ?? null,
+        anxietyProfile: anxietyProfile ?? null,
+        careerTransition: careerTransition
+          ? {
+              detected: careerTransition.detected,
+              type: careerTransition.type ?? null,
+              transitionNarrativeStatus:
+                (transitionNarrativeStatus as "not_started" | "developing" | "ready" | null) ?? null,
+            }
+          : undefined,
+        positioningStrengths: positioningStrengths ?? [],
+        interviewerConcerns: interviewerConcerns ?? [],
+        careerNarrativeGaps: careerNarrativeGaps ?? [],
+        storySeeds: (storySeeds ?? []).map((s, i) => ({
+          id: `seed-${i + 1}`,
+          resumeBullet: s.resumeBullet,
+          suggestedThemes: s.suggestedThemes ?? [],
+          jdRequirementsCovered: s.jdRequirementsCovered ?? [],
+          status: "seed" as const,
+        })),
+        targetRealityCheck: targetRealityCheck
+          ? {
+              concerns: targetRealityCheck.concerns ?? [],
+              hasBlockers: targetRealityCheck.hasBlockers ?? false,
+            }
+          : undefined,
+        readinessAssessment: readinessAssessment
+          ? {
+              level: (readinessAssessment.level as "not_ready" | "needs_work" | "competitive" | "strong" | null) ?? null,
+              biggestRisk: readinessAssessment.biggestRisk ?? null,
+              biggestAsset: readinessAssessment.biggestAsset ?? null,
+            }
+          : undefined,
+        coachingStrategy: coachingStrategy
+          ? {
+              priorities: coachingStrategy.priorities ?? [],
+              focusAreas: coachingStrategy.focusAreas ?? [],
+              avoidAreas: coachingStrategy.avoidAreas ?? [],
+              sessionPlan: coachingStrategy.sessionPlan ?? [],
+            }
+          : undefined,
+        coachingNotes: coachingNotes ?? "",
+      });
+
+      // Persist to database
+      await prisma.project.update({
+        where: { id: projectId },
+        data: {
+          coachingState: JSON.parse(JSON.stringify(coachingState)),
+          // Optionally update position from first target role
+          ...(targetRoles.length > 0 && { position: targetRoles[0] }),
+        },
+      });
+
+      return JSON.stringify({
+        success: true,
+        message: "Coaching profile saved successfully.",
+        profile: {
+          targetRoles: coachingState.profile.targetRoles,
+          coachingMode: coachingState.profile.coachingMode,
+          readinessLevel: coachingState.readinessAssessment.level,
+          storySeedCount: coachingState.resumeAnalysis.storySeeds.length,
+          priorityCount: coachingState.coachingStrategy.priorities.length,
+        },
+      });
+    } catch (err) {
+      console.error("saveCoachingProfile failed:", err);
+      return JSON.stringify({
+        success: false,
+        error: "Failed to save coaching profile. Please try again.",
+      });
+    }
+  },
+  {
+    name: "save_coaching_profile",
+    description:
+      "Save the candidate's coaching profile after the kickoff conversation. Call this once you have collected enough information (target roles, timeline, CV analysis, concerns). This persists the coaching state to the database for use in future preparation and mock interview sessions.",
+    schema: z.object({
+      projectId: z.string().describe("The project ID to save the coaching profile to"),
+      targetRoles: z.array(z.string()).describe("Target role(s) the candidate is preparing for"),
+      seniorityBand: z.string().nullable().optional().describe("Seniority level: 'early', 'mid', 'senior', or 'executive'"),
+      timeline: z.string().nullable().optional().describe("Interview timeline: 'triage' (≤48h), 'focused' (1-2 weeks), or 'full' (3+ weeks)"),
+      timelineDate: z.string().nullable().optional().describe("Specific interview date if known (ISO string)"),
+      coachingMode: z.string().nullable().optional().describe("Coaching mode based on timeline: 'triage', 'focused', or 'full'"),
+      feedbackDirectness: z.string().nullable().optional().describe("Preferred feedback style: 'gentle', 'balanced', or 'direct'"),
+      interviewHistory: z.string().nullable().optional().describe("Summary of the candidate's interview experience"),
+      interviewHistoryType: z.string().nullable().optional().describe("Interview experience type: 'first_time', 'active', or 'rusty'"),
+      biggestConcern: z.string().nullable().optional().describe("The candidate's biggest concern about interviewing"),
+      anxietyProfile: z.string().nullable().optional().describe("Notes on the candidate's anxiety level or specific anxieties"),
+      careerTransition: z
+        .object({
+          detected: z.boolean().describe("Whether a career transition was detected"),
+          type: z.string().nullable().optional().describe("Type of transition: function change, domain shift, IC↔management, industry pivot, career restart"),
+        })
+        .nullable()
+        .optional()
+        .describe("Career transition detection results"),
+      transitionNarrativeStatus: z.string().nullable().optional().describe("Status of transition narrative: 'not_started', 'developing', or 'ready'"),
+      positioningStrengths: z.array(z.string()).optional().describe("2-3 most impressive signals from the CV"),
+      interviewerConcerns: z.array(z.string()).optional().describe("Likely interviewer concerns from CV analysis"),
+      careerNarrativeGaps: z.array(z.string()).optional().describe("Career transitions that need a ready story"),
+      storySeeds: z
+        .array(
+          z.object({
+            resumeBullet: z.string().describe("The resume bullet that could become a story"),
+            suggestedThemes: z.array(z.string()).optional().describe("Themes this story could address"),
+            jdRequirementsCovered: z.array(z.string()).optional().describe("JD requirements this story could cover"),
+          })
+        )
+        .optional()
+        .describe("Resume bullets that likely have rich stories behind them"),
+      targetRealityCheck: z
+        .object({
+          concerns: z.array(z.string()).optional().describe("Reality check concerns (seniority gaps, missing skills, etc.)"),
+          hasBlockers: z.boolean().optional().describe("Whether there are blocking concerns"),
+        })
+        .nullable()
+        .optional()
+        .describe("Target role reality check results"),
+      readinessAssessment: z
+        .object({
+          level: z.string().nullable().optional().describe("Readiness level: 'not_ready', 'needs_work', 'competitive', or 'strong'"),
+          biggestRisk: z.string().nullable().optional().describe("The single biggest risk for the candidate"),
+          biggestAsset: z.string().nullable().optional().describe("The single biggest asset the candidate has"),
+        })
+        .nullable()
+        .optional()
+        .describe("Interview readiness assessment"),
+      coachingStrategy: z
+        .object({
+          priorities: z.array(z.string()).optional().describe("Ordered coaching priorities"),
+          focusAreas: z.array(z.string()).optional().describe("Areas to focus on in practice"),
+          avoidAreas: z.array(z.string()).optional().describe("Areas to avoid or deprioritize"),
+          sessionPlan: z.array(z.string()).optional().describe("Planned session structure"),
+        })
+        .nullable()
+        .optional()
+        .describe("Coaching strategy and plan"),
+      coachingNotes: z.string().optional().describe("Free-form coaching notes from the kickoff conversation"),
+    }),
+  }
+);
+
 // ─── Export all tools ───────────────────────────────────────────────────────
 
 export const interviewTools = [scoreAnswer, getWeakAreas, searchKnowledgeBase];
+export const kickoffTools = [saveCoachingProfile, searchKnowledgeBase];
