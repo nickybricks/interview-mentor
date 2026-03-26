@@ -159,11 +159,21 @@ export async function POST(request: NextRequest) {
     if (COACHING_CONTEXT_TYPES.includes(chat.type) && chat.project.coachingState) {
       const coachingContext = buildCoachingContext(chat.project.coachingState);
       if (coachingContext) {
-        contextInfo = coachingContext + contextInfo;
+        if (systemPrompt.includes("{{COACHING_STATE}}")) {
+          systemPrompt = systemPrompt.replace("{{COACHING_STATE}}", coachingContext);
+        } else {
+          // Legacy prompt without placeholder: prepend coaching context
+          contextInfo = coachingContext + contextInfo;
+        }
       }
     }
 
-    // Build full system prompt: base + coaching context + CV/JD context + RAG context
+    // Remove any unreplaced {{COACHING_STATE}} placeholder (no coaching state available)
+    if (systemPrompt.includes("{{COACHING_STATE}}")) {
+      systemPrompt = systemPrompt.replace("{{COACHING_STATE}}", "");
+    }
+
+    // Build full system prompt: base + CV/JD context + RAG context
     let fullSystemPrompt = systemPrompt + contextInfo;
     if (ragContext) {
       fullSystemPrompt += `\n\n## Relevant Context\nThe following excerpts were retrieved from the knowledge base and uploaded documents. Use them to inform your response when relevant:\n\n${ragContext}`;

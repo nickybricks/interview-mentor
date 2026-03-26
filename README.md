@@ -30,7 +30,7 @@ The AI coach uses a 50-question bank from the WHO interview method (Screening �
 
 - **Kickoff Coaching** — Conversational onboarding with CV analysis, coaching profile creation, timeline-aware coaching plan, and coaching state persistence
 - **Gap Analysis** — Automated CV vs. job description comparison with markdown-rendered results
-- **Interview Preparation** — AI-coached practice with 5 prompt variants (A–E), score tracking, and spaced repetition (enhanced with coaching context from kickoff)
+- **Interview Preparation** — AI-coached practice with coaching-state-aware session flow: opens with kickoff context (target role, concerns, story seeds, coaching mode), eliminates redundant onboarding, adapts intensity to triage/focused/full mode, and drills interviewer concerns proactively
 - **Mock Interviews** — Simulated interview sessions (unlocked at score ≥ 7.0, enhanced with coaching context)
 - **AI Settings Panel** — Per-feature model selection, temperature, top-p, frequency penalty, editable system prompts
 - **RAG Knowledge Base** — 11 curated coaching documents (scoring rubrics, STAR method, earned secrets, coaching frameworks, drills) embedded via pgvector for context-aware responses
