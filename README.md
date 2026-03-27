@@ -76,7 +76,7 @@ The AI coach uses a 50-question bank from the WHO interview method (Screening �
 │    9. Save AI response to DB                                 │
 │                                                              │
 │  app/api/upload/route.ts                                     │
-│    1. Parse PDF               (pdf-parse)                    │
+│    1. Parse PDF               (unpdf)                        │
 │    2. Save text to DB         (full text, no embedding)      │
 └──────────┬──────────────────────┬────────────────────────────┘
            │                      │

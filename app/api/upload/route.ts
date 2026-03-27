@@ -1,13 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { validateFileBuffer } from "@/lib/security";
-import { PDFParse } from "pdf-parse";
-import path from "path";
-
-// Set worker path for pdfjs-dist (Next.js webpack can't resolve it automatically)
-PDFParse.setWorker(
-  path.resolve(process.cwd(), "node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs")
-);
+import { extractText } from "unpdf";
 
 // POST /api/upload - Upload a PDF (CV or job description)
 export async function POST(request: NextRequest) {
@@ -41,10 +35,8 @@ export async function POST(request: NextRequest) {
     // Parse PDF to text
     let text: string;
     try {
-      const parser = new PDFParse({ data: new Uint8Array(buffer) });
-      const result = await parser.getText();
-      text = result.text;
-      await parser.destroy();
+      const result = await extractText(new Uint8Array(buffer));
+      text = result.text.join("\n");
     } catch (pdfError) {
       console.error("PDF parse error:", pdfError);
       return NextResponse.json(

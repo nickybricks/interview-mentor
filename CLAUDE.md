@@ -111,6 +111,6 @@ interview-mentor/
 
 - Never commit `.env` or `.env.local` files
 - Run `npx prisma generate` after schema changes
-- The app uses `pdf-parse` v2 for CV parsing
+- The app uses `unpdf` for CV parsing (replaced pdf-parse to avoid DOMMatrix errors on Vercel)
 - Mock interviews unlock at score >= 7.0
 - Always check if `npm run build` succeeds before pushing
