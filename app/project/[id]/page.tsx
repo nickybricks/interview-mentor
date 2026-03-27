@@ -151,6 +151,7 @@ export default function ProjectPage() {
       });
       if (res.ok) {
         const chat = await res.json();
+        window.dispatchEvent(new Event("projects-changed"));
         router.push(`/project/${params.id}/chat/${chat.id}`);
       }
     } catch (err) {

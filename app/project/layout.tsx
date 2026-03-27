@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import dynamic from "next/dynamic";
@@ -61,7 +61,7 @@ export default function ProjectLayout({
     return "gap_analysis";
   })();
 
-  const fetchProjects = async () => {
+  const fetchProjects = useCallback(async () => {
     try {
       const sessionId = getSessionId();
       const res = await fetch(`/api/projects?sessionId=${encodeURIComponent(sessionId)}`);
@@ -72,12 +72,19 @@ export default function ProjectLayout({
     } catch (err) {
       console.error("Failed to fetch projects:", err);
     }
-  };
+  }, []);
 
-  // Fetch projects on mount & on navigation; close mobile sidebar on navigate
+  // Fetch projects once on mount + listen for explicit refresh signals
+  useEffect(() => {
+    fetchProjects();
+    const handle = () => fetchProjects();
+    window.addEventListener("projects-changed", handle);
+    return () => window.removeEventListener("projects-changed", handle);
+  }, [fetchProjects]);
+
+  // Close mobile sidebar on navigation
   useEffect(() => {
     setMobileOpen(false);
-    fetchProjects();
   }, [pathname]);
 
   return (
