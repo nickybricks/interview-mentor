@@ -29,7 +29,6 @@ import {
   Plus,
   MessageSquare,
   Search,
-  PanelLeftClose,
   Mic,
   ChevronRight,
   MoreHorizontal,
@@ -70,10 +69,9 @@ const LANGUAGE_OPTIONS: { value: Locale; label: string }[] = [
 interface SidebarProps {
   projects: Project[];
   onProjectsChange: () => void;
-  onCollapse?: () => void;
 }
 
-export function Sidebar({ projects, onProjectsChange, onCollapse }: SidebarProps) {
+export function Sidebar({ projects, onProjectsChange }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { t, locale, setLocale } = useI18n();
@@ -155,15 +153,6 @@ export function Sidebar({ projects, onProjectsChange, onCollapse }: SidebarProps
       <div className="flex items-center gap-2 px-4 py-3">
         <Image src="/logo.png" alt="Interview Mentor" width={24} height={24} className="shrink-0" />
         <h1 className="flex-1 text-sm font-semibold">Interview Mentor</h1>
-        {onCollapse && (
-          <button
-            onClick={onCollapse}
-            aria-label="Collapse sidebar"
-            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            <PanelLeftClose className="size-4" aria-hidden="true" />
-          </button>
-        )}
       </div>
 
       <Separator />

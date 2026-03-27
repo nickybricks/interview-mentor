@@ -12,7 +12,7 @@ const AISettingsPanel = dynamic(() =>
 import { getSessionId } from "@/lib/session";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
-import { Menu, Settings2, PanelLeftClose, PanelLeft } from "lucide-react";
+import { Menu, Settings2, PanelLeft } from "lucide-react";
 
 type AIFeatureKey = "gap_analysis" | "preparation" | "mock_interview";
 
@@ -81,13 +81,23 @@ export default function ProjectLayout({
   }, [pathname]);
 
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="relative flex h-dvh overflow-hidden">
       {/* Desktop sidebar */}
-      {!sidebarCollapsed && (
-        <aside className="hidden md:flex w-72 shrink-0 border-r border-sidebar-border bg-sidebar">
-          <Sidebar projects={projects} onProjectsChange={fetchProjects} onCollapse={() => setSidebarCollapsed(true)} />
-        </aside>
-      )}
+      <aside
+        className={`hidden md:flex shrink-0 border-r border-sidebar-border bg-sidebar overflow-hidden transition-[width] duration-300 ease-in-out ${sidebarCollapsed ? "w-0 border-r-0" : "w-72"}`}
+      >
+        <Sidebar projects={projects} onProjectsChange={fetchProjects} />
+      </aside>
+
+      {/* Single persistent sidebar toggle (desktop only) */}
+      <button
+        onClick={() => setSidebarCollapsed((v) => !v)}
+        aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+        style={{ left: sidebarCollapsed ? "0.75rem" : "calc(18rem - 2rem)" }}
+        className="absolute top-3 z-40 hidden md:flex rounded-md p-1 text-muted-foreground transition-[left] duration-300 ease-in-out hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+      >
+        <PanelLeft className="size-4" aria-hidden="true" />
+      </button>
 
       {/* Mobile sidebar */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
@@ -110,18 +120,6 @@ export default function ProjectLayout({
 
       {/* Main content */}
       <main className="relative flex-1 overflow-hidden">
-        {/* Sidebar toggle button (desktop only) */}
-        {sidebarCollapsed && (
-          <Button
-            variant="ghost"
-            size="icon"
-            aria-label="Expand sidebar"
-            className="absolute top-3 left-3 z-30 hidden md:flex"
-            onClick={() => setSidebarCollapsed(false)}
-          >
-            <PanelLeft className="size-5" aria-hidden="true" />
-          </Button>
-        )}
         {/* Settings toggle button */}
         <Button
           variant="ghost"

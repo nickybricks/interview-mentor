@@ -38,7 +38,21 @@ export async function POST(request: NextRequest) {
       language: locale,
     });
 
-    return NextResponse.json({ text: transcription.text });
+    // Whisper hallucinates subtitle artifacts on silent audio — return empty string for these
+    const WHISPER_HALLUCINATIONS = [
+      "Untertitel der Amara.org-Community",
+      "Amara.org",
+      "Subtitles by the Amara.org community",
+      "Thank you for watching",
+      "Thanks for watching",
+      "www.mooji.org",
+    ];
+    const text = transcription.text.trim();
+    const isHallucination = WHISPER_HALLUCINATIONS.some((artifact) =>
+      text.includes(artifact)
+    );
+
+    return NextResponse.json({ text: isHallucination ? "" : text });
   } catch (error) {
     console.error("Transcription failed:", error);
     return NextResponse.json(
