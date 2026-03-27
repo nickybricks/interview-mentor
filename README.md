@@ -30,7 +30,7 @@ The AI coach uses a 50-question bank from the WHO interview method (Screening �
 ## Features
 
 - **Kickoff Coaching** — Conversational onboarding with CV analysis, coaching profile creation, timeline-aware coaching plan, coaching state persistence, and completion overlay with "Start Interview Prep" quick-start
-- **Gap Analysis** — Automated CV vs. job description comparison with markdown-rendered results
+- **Gap Analysis** — Automated CV vs. job description comparison with markdown-rendered results (UI hidden pending further development)
 - **Interview Preparation** — AI-coached practice with coaching-state-aware session flow: opens with kickoff context (target role, concerns, story seeds, coaching mode), eliminates redundant onboarding, adapts intensity to triage/focused/full mode, and drills interviewer concerns proactively
 - **Mock Interviews** — Simulated interview sessions (unlocked at score ≥ 7.0, enhanced with coaching context)
 - **AI Settings Panel** — Per-feature model selection, temperature, top-p, frequency penalty, editable system prompts
@@ -128,9 +128,9 @@ Active for `preparation` and `mock_interview` chats only (gap analysis uses the 
 
 | Tool | Purpose | Used In |
 |---|---|---|
-| `scoreAnswer` | Dedicated LLM call (temperature 0.2) evaluating answers across 5 dimensions: Substance, Structure, Relevance, Credibility, Differentiation (each 1–5, mapped to 1–10) | Preparation |
-| `getWeakAreas` | Queries flagged messages grouped by category, returns average scores and sample questions per weak area | Preparation |
-| `searchKnowledgeBase` | Searches RAG knowledge base via `retrieveContext()`, returns top 5 results with source, similarity, and preview | Preparation, Kickoff |
+| `scoreAnswer` | Dedicated LLM call (temperature 0.2) evaluating answers across 5 dimensions: Substance, Structure, Relevance, Credibility, Differentiation (each 1–5, mapped to 1–10) | Preparation, Mock Interview |
+| `getWeakAreas` | Queries flagged messages grouped by category, returns average scores and sample questions per weak area | Preparation, Mock Interview |
+| `searchKnowledgeBase` | Searches RAG knowledge base via `retrieveContext()`, returns top 5 results with source, similarity, and preview | Preparation, Mock Interview, Kickoff |
 | `saveCoachingProfile` | Persists the candidate's coaching state (profile, resume analysis, strategy, readiness assessment) to the database after the kickoff conversation | Kickoff |
 
 ## API Routes
@@ -165,6 +165,19 @@ Active for `preparation` and `mock_interview` chats only (gap analysis uses the 
 |---|---|---|
 | `POST` | `/api/upload` | Upload PDF (FormData: file, projectId, type, label) |
 | `DELETE` | `/api/documents/[id]` | Delete additional document |
+| `POST` | `/api/transcribe` | Transcribe audio file via OpenAI Whisper |
+
+### Gap Analysis
+| Method | URL | Description |
+|---|---|---|
+| `POST` | `/api/projects/[id]/gap-analysis` | Regenerate gap analysis for a project |
+
+### AI Settings
+| Method | URL | Description |
+|---|---|---|
+| `GET` | `/api/ai-settings` | Get current AI settings for all features |
+| `PUT` | `/api/ai-settings` | Update AI settings (model, temperature, system prompts) |
+| `GET` | `/api/ai-settings/defaults` | Get default system prompts for all features |
 
 ## Security
 
@@ -251,12 +264,10 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 - **Smarter question selection** — Use RAG similarity search for more relevant follow-up question selection
 - **Mock interview prompt refinement** — Improve realism and difficulty scaling of mock interview sessions
-- **Voice input via Whisper API** — Currently implemented; future work includes real-time streaming transcription
 - **Version history on regenerate** — Currently supports version navigation; future work includes diff view between versions
 - **Admin vs. user mode** — Add role-based access for coaches to review candidate progress
 - **Language switching fix** — System prompts remain in German when UI switches to English; prompts need i18n support
 - **Score display in header** — Show overall score prominently in the app header/sidebar for quick reference
-- **Deployment (Phase 6)** — Production deployment to Vercel or similar platform
 - **Storybank development** — Build out full storybank workflow from story seeds identified in kickoff
 
 ## Deployment Status

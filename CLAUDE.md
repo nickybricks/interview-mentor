@@ -91,6 +91,45 @@ gh release create v{VERSION} --title "v{VERSION}: {Brief description}" --notes "
 
 ---
 
+## Development Workflow
+
+### Planning
+- Enter plan mode for ANY non-trivial task (3+ steps or architectural decisions)
+- If something goes sideways, STOP and re-plan immediately — don't keep pushing
+- Write detailed specs upfront to reduce ambiguity
+
+### Task Management
+1. Write plan to `tasks/todo.md` with checkable items
+2. Check in before starting implementation
+3. Mark items complete as you go
+4. Provide high-level summary at each step
+5. Add review section to `tasks/todo.md`
+6. Update `tasks/lessons.md` after corrections
+
+### Verification Before Done
+- Never mark a task complete without proving it works
+- Run `npm run build` successfully before considering anything done
+- Run tests, check logs, demonstrate correctness
+- Ask: "Would a staff engineer approve this?"
+
+### Self-Improvement Loop
+- After ANY correction from the user: update `tasks/lessons.md` with the pattern
+- Write rules that prevent the same mistake recurring
+- Review lessons at session start
+
+### Code Quality
+- **Simplicity First**: Make every change as simple as possible. Impact minimal code.
+- **No Laziness**: Find root causes. No temporary fixes.
+- For non-trivial changes: pause and ask "is there a more elegant way?"
+- If a fix feels hacky, implement the elegant solution instead
+- Skip this for simple, obvious fixes — don't over-engineer
+
+### Autonomous Bug Fixing
+- When given a bug report: just fix it. Don't ask for hand-holding.
+- Point at logs, errors, failing tests — then resolve them.
+
+---
+
 ## File Structure Quick Reference
 
 ```
@@ -101,6 +140,9 @@ interview-mentor/
 ├── prisma/           # Database schema & migrations
 ├── docs/             # Additional documentation
 ├── public/           # Static assets
+├── tasks/            # Task tracking and lessons learned
+│   ├── todo.md       # Current task plan with checkable items
+│   └── lessons.md    # Patterns and corrections log
 ├── README.md         # Project documentation (keep updated on push!)
 └── ai-settings.json  # AI model configuration
 ```

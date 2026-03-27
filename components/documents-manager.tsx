@@ -323,28 +323,32 @@ export function DocumentsManager({
           </DialogContent>
         </Dialog>
 
-        {/* Start Gap Analysis button */}
-        <Button
-          onClick={onStartGapAnalysis}
-          disabled={!canStartGap || gapLoading}
-          className="w-full"
-        >
-          {gapLoading ? (
-            <>
-              <Loader2 className="mr-2 size-4 animate-spin" />
-              {t("project.gapGenerating")}
-            </>
-          ) : (
-            <>
-              <Search className="mr-2 size-4" />
-              {t("docs.startGapAnalysis")}
-            </>
-          )}
-        </Button>
-        {!canStartGap && (
-          <p className="text-center text-xs text-muted-foreground">
-            {t("project.cvRequired")}
-          </p>
+        {/* Start Gap Analysis button — hidden: gap analysis card is disabled */}
+        {false && (
+          <>
+            <Button
+              onClick={onStartGapAnalysis}
+              disabled={!canStartGap || gapLoading}
+              className="w-full"
+            >
+              {gapLoading ? (
+                <>
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                  {t("project.gapGenerating")}
+                </>
+              ) : (
+                <>
+                  <Search className="mr-2 size-4" />
+                  {t("docs.startGapAnalysis")}
+                </>
+              )}
+            </Button>
+            {!canStartGap && (
+              <p className="text-center text-xs text-muted-foreground">
+                {t("project.cvRequired")}
+              </p>
+            )}
+          </>
         )}
       </CardContent>
     </Card>

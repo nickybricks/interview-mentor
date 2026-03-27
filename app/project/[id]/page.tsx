@@ -225,7 +225,14 @@ export default function ProjectPage() {
               {/* Kickoff */}
               <button
                 type="button"
-                onClick={() => startChat("kickoff")}
+                onClick={() => {
+                  const existing = project.chats.find((c) => c.type === "kickoff");
+                  if (existing) {
+                    router.push(`/project/${params.id}/chat/${existing.id}`);
+                  } else {
+                    startChat("kickoff");
+                  }
+                }}
                 className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <Bot className="size-8 text-purple-600" />
@@ -235,21 +242,23 @@ export default function ProjectPage() {
                 </span>
               </button>
 
-              {/* Gap Analysis */}
+              {/* Gap Analysis — hidden: not useful yet */}
+              {false && (
               <button
                 type="button"
                 onClick={() => startChat("gap_analysis")}
-                disabled={!project.hasCv || !project.hasJd}
+                disabled={!project!.hasCv || !project!.hasJd}
                 className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <Search className="size-8 text-amber-600" />
                 <span className="font-medium">{t("chatType.gap_analysis")}</span>
                 <span className="text-xs text-muted-foreground">
-                  {!project.hasCv || !project.hasJd
+                  {!project!.hasCv || !project!.hasJd
                     ? t("project.cvRequired")
                     : t("project.gapCompare")}
                 </span>
               </button>
+              )}
 
               {/* Preparation */}
               <button
@@ -288,8 +297,8 @@ export default function ProjectPage() {
           </CardContent>
         </Card>
 
-        {/* Gap Analysis Result */}
-        {project.gapAnalysis && !gapLoading && (
+        {/* Gap Analysis Result — hidden: not useful yet */}
+        {false && project!.gapAnalysis && !gapLoading && (
           <Card>
             <CardHeader className="p-0">
               <button
@@ -323,7 +332,7 @@ export default function ProjectPage() {
                 <CardContent>
                   <div className="prose prose-sm dark:prose-invert max-w-none">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {project.gapAnalysis}
+                      {project!.gapAnalysis}
                     </ReactMarkdown>
                   </div>
                 </CardContent>
