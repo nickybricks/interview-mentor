@@ -69,14 +69,16 @@ export async function retrieveWithQueryTranslation(
   featureKey: AIFeatureKey,
   k: number = 5
 ): Promise<RAGResult> {
-  // Step 1: Generate alternative queries
+  // Start original query search immediately while generating alternatives (async-parallel)
+  const originalSearchPromise = retrieveContext(query, k);
   const alternativeQueries = await generateAlternativeQueries(query, featureKey);
 
-  // Step 2: Search KB with all queries (original + alternatives)
-  const allQueries = [query, ...alternativeQueries];
-  const allResults = await Promise.all(
-    allQueries.map((q) => retrieveContext(q, k))
-  );
+  // Search KB with alternative queries in parallel, merge with original
+  const [originalResults, ...altResults] = await Promise.all([
+    originalSearchPromise,
+    ...alternativeQueries.map((q) => retrieveContext(q, k)),
+  ]);
+  const allResults = [originalResults, ...altResults];
 
   // Step 3: Merge and deduplicate by content
   const seen = new Map<string, RAGSource>();

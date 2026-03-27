@@ -14,7 +14,10 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { DocumentsManager } from "@/components/documents-manager";
 import { useI18n } from "@/lib/i18n";
-import ReactMarkdown from "react-markdown";
+import dynamic from "next/dynamic";
+
+// Lazy-load ReactMarkdown (~50KB) — only needed when gap analysis is open (bundle-dynamic-imports)
+const ReactMarkdown = dynamic(() => import("react-markdown"), { ssr: false });
 import remarkGfm from "remark-gfm";
 import {
   GraduationCap,
@@ -34,8 +37,8 @@ interface ProjectDetail {
   name: string;
   company: string | null;
   position: string | null;
-  cvText: string | null;
-  jobDescription: string | null;
+  hasCv: boolean;
+  hasJd: boolean;
   gapAnalysis: string | null;
   overallScore: number | null;
   createdAt: string;
@@ -106,7 +109,7 @@ export default function ProjectPage() {
   };
 
   const handleStartGapAnalysis = async () => {
-    if (!project?.cvText || !project?.jobDescription) return;
+    if (!project?.hasCv || !project?.hasJd) return;
     setGapLoading(true);
     try {
       await fetch(`/api/projects/${params.id}/gap-analysis`, {
@@ -201,8 +204,8 @@ export default function ProjectPage() {
         {/* Documents */}
         <DocumentsManager
           projectId={project.id}
-          hasCv={!!project.cvText}
-          hasJd={!!project.jobDescription}
+          hasCv={project.hasCv}
+          hasJd={project.hasJd}
           documents={project.documents}
           gapLoading={gapLoading}
           onFileUploaded={handleFileUploaded}
@@ -236,13 +239,13 @@ export default function ProjectPage() {
               <button
                 type="button"
                 onClick={() => startChat("gap_analysis")}
-                disabled={!project.cvText || !project.jobDescription}
+                disabled={!project.hasCv || !project.hasJd}
                 className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <Search className="size-8 text-amber-600" />
                 <span className="font-medium">{t("chatType.gap_analysis")}</span>
                 <span className="text-xs text-muted-foreground">
-                  {!project.cvText || !project.jobDescription
+                  {!project.hasCv || !project.hasJd
                     ? t("project.cvRequired")
                     : t("project.gapCompare")}
                 </span>

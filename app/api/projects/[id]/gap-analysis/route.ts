@@ -13,9 +13,16 @@ export async function POST(
   const locale = getLocaleFromRequest(_request);
 
   try {
-    const project = await prisma.project.findUnique({
-      where: { id },
-    });
+    // Parallelize independent DB queries (async-parallel)
+    const [project, additionalDocs] = await Promise.all([
+      prisma.project.findUnique({
+        where: { id },
+      }),
+      prisma.document.findMany({
+        where: { projectId: id },
+        select: { name: true, text: true },
+      }),
+    ]);
 
     if (!project) {
       return NextResponse.json({ error: "Project not found" }, { status: 404 });
@@ -27,12 +34,6 @@ export async function POST(
         { status: 400 }
       );
     }
-
-    // Fetch additional documents
-    const additionalDocs = await prisma.document.findMany({
-      where: { projectId: id },
-      select: { name: true, text: true },
-    });
 
     // Clear existing gap analysis so UI shows loading state
     await prisma.project.update({

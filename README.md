@@ -25,6 +25,7 @@ The AI coach uses a 50-question bank from the WHO interview method (Screening â†
 | **Tailwind CSS v4** | Utility-first styling |
 | **shadcn/ui** (base-nova) | Pre-built UI components |
 | **react-markdown** + remark-gfm | Markdown rendering for AI responses |
+| **@vercel/analytics** + **@vercel/speed-insights** | Usage analytics and Core Web Vitals tracking |
 
 ## Features
 
@@ -240,6 +241,11 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 - [x] Chat status tracking (`active`/`completed`) with PATCH API
 - [x] "Start Interview Prep" quick-start from kickoff overlay (reuses or creates preparation chat)
 - [x] "More Questions" flow resets chat to active before follow-up
+- [x] Vercel Analytics + Speed Insights integration
+- [x] Bundle optimization: dynamic imports for ReactMarkdown, AI settings panel, kickoff overlay
+- [x] API performance: parallelized DB queries, batched post-stream DB writes, stripped large text fields from project API response
+- [x] RAG parallelization: original query search runs concurrently with alternative query generation
+- [x] Branding: gradient M logo replacing generic icon in sidebar and as favicon
 
 ## Known Limitations & Future Work
 
@@ -255,4 +261,4 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ## Deployment Status
 
-**Not deployed â€” runs locally.** The app is fully functional in local development. Database is on Supabase PostgreSQL (cloud-hosted). Deployment requires environment variable configuration and production Vercel setup.
+**Deployed to Vercel.** Database is on Supabase PostgreSQL (cloud-hosted). Vercel Analytics and Speed Insights are active for usage and performance monitoring.

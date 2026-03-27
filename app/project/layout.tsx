@@ -3,7 +3,12 @@
 import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
-import { AISettingsPanel } from "@/components/ai-settings-panel";
+import dynamic from "next/dynamic";
+
+// Lazy-load settings panel — hidden behind toggle, not needed on initial render (bundle-dynamic-imports)
+const AISettingsPanel = dynamic(() =>
+  import("@/components/ai-settings-panel").then((mod) => mod.AISettingsPanel)
+);
 import { getSessionId } from "@/lib/session";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";

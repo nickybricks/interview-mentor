@@ -9,25 +9,36 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const project = await prisma.project.findUnique({
-      where: { id },
-      include: {
-        chats: {
-          orderBy: { createdAt: "desc" },
-          include: {
-            messages: {
-              orderBy: { createdAt: "desc" },
-              take: 1,
-              select: { content: true, createdAt: true },
+    // Parallelize independent DB queries (async-parallel)
+    const [project, scoredMessages] = await Promise.all([
+      prisma.project.findUnique({
+        where: { id },
+        include: {
+          chats: {
+            orderBy: { createdAt: "desc" },
+            include: {
+              messages: {
+                orderBy: { createdAt: "desc" },
+                take: 1,
+                select: { content: true, createdAt: true },
+              },
             },
           },
+          documents: {
+            orderBy: { createdAt: "asc" },
+            select: { id: true, name: true, label: true, createdAt: true },
+          },
         },
-        documents: {
-          orderBy: { createdAt: "asc" },
-          select: { id: true, name: true, label: true, createdAt: true },
+      }),
+      prisma.message.findMany({
+        where: {
+          role: "user",
+          score: { not: null },
+          chat: { projectId: id },
         },
-      },
-    });
+        select: { score: true, category: true },
+      }),
+    ]);
 
     if (!project) {
       return NextResponse.json(
@@ -35,16 +46,6 @@ export async function GET(
         { status: 404 }
       );
     }
-
-    // Compute category scores
-    const scoredMessages = await prisma.message.findMany({
-      where: {
-        role: "user",
-        score: { not: null },
-        chat: { projectId: id },
-      },
-      select: { score: true, category: true },
-    });
 
     const categoryMap: Record<string, { total: number; count: number }> = {};
     for (const msg of scoredMessages) {
@@ -63,7 +64,14 @@ export async function GET(
       count: data.count,
     }));
 
-    return NextResponse.json({ ...project, categoryScores });
+    // Strip large text fields — client only needs booleans (server-serialization)
+    const { cvText, jobDescription, ...projectWithout } = project;
+    return NextResponse.json({
+      ...projectWithout,
+      hasCv: !!cvText,
+      hasJd: !!jobDescription,
+      categoryScores,
+    });
   } catch (error) {
     console.error("Failed to fetch project:", error);
     return NextResponse.json(

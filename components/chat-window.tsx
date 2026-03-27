@@ -22,7 +22,12 @@ import {
   X,
 } from "lucide-react";
 import { ToolCallCard, type ToolCallDisplay } from "@/components/tool-call-card";
-import { KickoffCompleteOverlay } from "@/components/kickoff-complete-overlay";
+import dynamic from "next/dynamic";
+
+// Lazy-load overlay — only shown after kickoff completion (bundle-dynamic-imports)
+const KickoffCompleteOverlay = dynamic(() =>
+  import("@/components/kickoff-complete-overlay").then((mod) => mod.KickoffCompleteOverlay)
+);
 
 interface RAGSourceDisplay {
   source: string;

@@ -448,7 +448,6 @@ The user has returned with a follow-up question.
           // Extract score — prefer tool-based score, fallback to regex
           let extractedScore: number | null = null;
 
-          // Check if score_answer tool was called
           const scoreToolResult = toolCallResults.find((tc) => tc.name === "score_answer");
           if (scoreToolResult && typeof scoreToolResult.result === "object" && scoreToolResult.result !== null) {
             const result = scoreToolResult.result as { overallScore?: number };
@@ -457,7 +456,6 @@ The user has returned with a follow-up question.
             }
           }
 
-          // Fallback: regex-based score extraction from response text
           if (extractedScore == null) {
             const scoreMatch = fullResponse.match(
               /(?:\*\*)?Score:(?:\*\*)?\s*(\d+(?:\.\d+)?)\s*\/\s*10/
@@ -467,66 +465,70 @@ The user has returned with a follow-up question.
             }
           }
 
-          if (extractedScore != null) {
-            const score = extractedScore;
-            // Update the user's last message with the score and flagged status
-            const lastUserMessage = await prisma.message.findFirst({
-              where: { chatId, role: "user" },
-              orderBy: { createdAt: "desc" },
-            });
-            if (lastUserMessage) {
-              await prisma.message.update({
-                where: { id: lastUserMessage.id },
-                data: {
-                  score,
-                  flagged: score < 7, // 0-6: needs revisiting
-                },
-              });
-            }
-
-            // Update project overallScore (average of all scored messages)
-            const allScored = await prisma.message.findMany({
-              where: {
-                role: "user",
-                score: { not: null },
-                chat: { projectId: chat.projectId },
-              },
-              select: { score: true },
-            });
-            if (allScored.length > 0) {
-              const avg =
-                allScored.reduce((sum, m) => sum + (m.score ?? 0), 0) /
-                allScored.length;
-              await prisma.project.update({
-                where: { id: chat.projectId },
-                data: { overallScore: Math.round(avg * 10) / 10 },
-              });
-            }
-          }
-
           // Extract category if present
           const categoryMatch = fullResponse.match(
             /\*\*Category:\*\*\s*(?:🏆|🧠|🏢|👥|📚)?\s*(.+)/
           );
-          if (categoryMatch) {
-            await prisma.message.update({
-              where: { id: assistantMessage.id },
-              data: { category: categoryMatch[1].trim() },
-            });
-            // Also store category on the user message for easier querying
-            if (extractedScore != null) {
-              const lastUserMessage = await prisma.message.findFirst({
-                where: { chatId, role: "user" },
-                orderBy: { createdAt: "desc" },
-              });
-              if (lastUserMessage) {
+          const extractedCategory = categoryMatch?.[1]?.trim() ?? null;
+
+          // Batch post-stream DB updates in parallel (async-parallel)
+          const postStreamUpdates: Promise<unknown>[] = [];
+
+          // Update assistant message category
+          if (extractedCategory) {
+            postStreamUpdates.push(
+              prisma.message.update({
+                where: { id: assistantMessage.id },
+                data: { category: extractedCategory },
+              })
+            );
+          }
+
+          // Update user message with score + category, then recalculate project average
+          if (extractedScore != null || extractedCategory) {
+            const score = extractedScore;
+            postStreamUpdates.push(
+              (async () => {
+                const lastUserMessage = await prisma.message.findFirst({
+                  where: { chatId, role: "user" },
+                  orderBy: { createdAt: "desc" },
+                });
+                if (!lastUserMessage) return;
+
+                // Single update for score + category on user message
                 await prisma.message.update({
                   where: { id: lastUserMessage.id },
-                  data: { category: categoryMatch[1].trim() },
+                  data: {
+                    ...(score != null && { score, flagged: score < 7 }),
+                    ...(extractedCategory && { category: extractedCategory }),
+                  },
                 });
-              }
-            }
+
+                // Recalculate project average if scored
+                if (score != null) {
+                  const allScored = await prisma.message.findMany({
+                    where: {
+                      role: "user",
+                      score: { not: null },
+                      chat: { projectId: chat.projectId },
+                    },
+                    select: { score: true },
+                  });
+                  if (allScored.length > 0) {
+                    const avg =
+                      allScored.reduce((sum, m) => sum + (m.score ?? 0), 0) /
+                      allScored.length;
+                    await prisma.project.update({
+                      where: { id: chat.projectId },
+                      data: { overallScore: Math.round(avg * 10) / 10 },
+                    });
+                  }
+                }
+              })()
+            );
           }
+
+          await Promise.all(postStreamUpdates);
 
           // Send done signal with full token breakdown
           const tokensPerSec =
