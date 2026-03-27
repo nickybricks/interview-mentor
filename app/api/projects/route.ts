@@ -1,11 +1,19 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 
-// GET /api/projects - List all projects
-export async function GET() {
+// GET /api/projects - List all projects for a session
+export async function GET(request: NextRequest) {
   try {
+    const sessionId = request.nextUrl.searchParams.get("sessionId");
+    if (!sessionId) {
+      return NextResponse.json(
+        { error: "sessionId is required" },
+        { status: 400 }
+      );
+    }
+
     const projects = await prisma.project.findMany({
-      where: { id: { not: "__knowledge_base__" } },
+      where: { id: { not: "__knowledge_base__" }, sessionId },
       orderBy: { createdAt: "desc" },
       include: {
         chats: {
@@ -28,11 +36,18 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { name, company, position } = body;
+    const { name, company, position, sessionId } = body;
 
     if (!name || typeof name !== "string" || name.trim().length === 0) {
       return NextResponse.json(
         { error: "Project name is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!sessionId || typeof sessionId !== "string") {
+      return NextResponse.json(
+        { error: "sessionId is required" },
         { status: 400 }
       );
     }
@@ -42,6 +57,7 @@ export async function POST(request: NextRequest) {
         name: name.trim(),
         company: company?.trim() || null,
         position: position?.trim() || null,
+        sessionId,
       },
     });
 

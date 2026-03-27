@@ -12,6 +12,7 @@ model Project {
   name            String
   company         String?
   position        String?
+  sessionId       String?
   cvText          String?
   jobDescription  String?
   gapAnalysis     String?

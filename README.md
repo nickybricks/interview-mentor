@@ -45,6 +45,7 @@ The AI coach uses a 50-question bank from the WHO interview method (Screening �
 - **Collapsible Sidebar** — Desktop sidebar toggle, mobile Sheet overlay
 - **Responsive Design** — Full mobile support with adaptive layouts
 - **Accessibility** — aria-labels on all icon buttons, focus-visible states, semantic HTML, aria-live regions for async updates, confirmation dialogs for destructive actions, locale-aware number/currency/date formatting via `Intl.*`
+- **Anonymous Sessions** — Each browser gets a unique session ID (UUID stored in localStorage) so users only see their own projects — no login required
 
 ## Architecture
 

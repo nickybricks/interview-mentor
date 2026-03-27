@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useI18n } from "@/lib/i18n";
+import { getSessionId } from "@/lib/session";
 
 interface NewProjectDialogProps {
   open: boolean;
@@ -52,6 +53,7 @@ export function NewProjectDialog({
           name: name.trim(),
           company: company.trim() || undefined,
           position: position.trim() || undefined,
+          sessionId: getSessionId(),
         }),
       });
 

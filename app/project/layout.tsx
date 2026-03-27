@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { Sidebar } from "@/components/sidebar";
 import { AISettingsPanel } from "@/components/ai-settings-panel";
+import { getSessionId } from "@/lib/session";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Menu, Settings2, PanelLeftClose, PanelLeft } from "lucide-react";
@@ -57,7 +58,8 @@ export default function ProjectLayout({
 
   const fetchProjects = async () => {
     try {
-      const res = await fetch("/api/projects");
+      const sessionId = getSessionId();
+      const res = await fetch(`/api/projects?sessionId=${encodeURIComponent(sessionId)}`);
       if (res.ok) {
         const data = await res.json();
         setProjects(data);
