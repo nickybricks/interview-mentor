@@ -121,6 +121,9 @@ export const translations = {
     "project.mockLocked": "Ab Score 7.0 (aktuell: {score})",
     "project.locked": "Gesperrt",
     "project.export": "Export als Markdown",
+    "project.comingSoon": "Demnächst",
+    "project.linkedinDesc": "Profil & Outreach optimieren",
+    "project.soon": "Bald",
     "project.empty.title": "Willkommen bei Interview Mentor",
     "project.empty.description": "Erstelle ein Bewerbungsprojekt in der Sidebar, um mit deiner Interviewvorbereitung zu starten.",
 
@@ -310,6 +313,9 @@ export const translations = {
     "project.mockLocked": "Requires score 7.0 (current: {score})",
     "project.locked": "Locked",
     "project.export": "Export as Markdown",
+    "project.comingSoon": "Coming Soon",
+    "project.linkedinDesc": "Profile & outreach optimization",
+    "project.soon": "Soon",
     "project.empty.title": "Welcome to Interview Mentor",
     "project.empty.description": "Create a project in the sidebar to start your interview preparation.",
 

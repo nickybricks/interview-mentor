@@ -295,6 +295,21 @@ export default function ProjectPage() {
                 )}
               </button>
             </div>
+
+            {/* Coming Soon */}
+            <div className="mt-4 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">{t("project.comingSoon")}</p>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center cursor-default opacity-50">
+                  <span className="text-3xl leading-none" aria-hidden="true">💼</span>
+                  <span className="font-medium">LinkedIn</span>
+                  <span className="text-xs text-muted-foreground">{t("project.linkedinDesc")}</span>
+                  <Badge variant="outline" className="absolute -top-2 -right-2 text-[10px]">
+                    {t("project.soon")}
+                  </Badge>
+                </div>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
