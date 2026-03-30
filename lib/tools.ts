@@ -409,7 +409,99 @@ export const saveCoachingProfile = tool(
   }
 );
 
+// ─── Tool 5: save_linkedin_analysis ─────────────────────────────────────────
+
+export const saveLinkedInAnalysis = tool(
+  async ({
+    projectId,
+    overallScore,
+    discoverability,
+    credibility,
+    differentiation,
+    topFixesPending,
+    depthLevel,
+    consistencyScore,
+    date,
+  }) => {
+    try {
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { coachingState: true },
+      });
+
+      const existingState =
+        project?.coachingState && typeof project.coachingState === "object"
+          ? (project.coachingState as Record<string, unknown>)
+          : {};
+
+      const updatedState = {
+        ...existingState,
+        linkedInAnalysis: {
+          overallScore,
+          discoverability,
+          credibility,
+          differentiation,
+          topFixesPending: topFixesPending ?? [],
+          depthLevel,
+          consistencyScore: consistencyScore ?? null,
+          date,
+        },
+      };
+
+      await prisma.project.update({
+        where: { id: projectId },
+        data: { coachingState: updatedState },
+      });
+
+      return JSON.stringify({
+        success: true,
+        message: "LinkedIn analysis saved successfully.",
+      });
+    } catch (err) {
+      console.error("saveLinkedInAnalysis failed:", err);
+      return JSON.stringify({
+        success: false,
+        error: "Failed to save LinkedIn analysis.",
+      });
+    }
+  },
+  {
+    name: "save_linkedin_analysis",
+    description:
+      "Save the LinkedIn profile audit results to the coaching state after completing an audit. Call this once the full audit output has been delivered to the user.",
+    schema: z.object({
+      projectId: z.string().describe("The project ID to save the analysis to"),
+      overallScore: z
+        .enum(["Strong", "Needs Work", "Weak"])
+        .describe("Overall LinkedIn profile assessment"),
+      discoverability: z
+        .enum(["Strong", "Moderate", "Weak"])
+        .describe("Recruiter discoverability score"),
+      credibility: z
+        .enum(["Strong", "Moderate", "Weak"])
+        .describe("Profile credibility on visit score"),
+      differentiation: z
+        .enum(["Strong", "Moderate", "Weak"])
+        .describe("Differentiation score"),
+      topFixesPending: z
+        .array(z.string())
+        .optional()
+        .describe("Top fixes the user still needs to action"),
+      depthLevel: z
+        .enum(["quick", "standard", "deep"])
+        .describe("The depth level of the audit that was run"),
+      consistencyScore: z
+        .enum(["Aligned", "Minor Gaps", "Significant Gaps"])
+        .nullable()
+        .optional()
+        .describe("Consistency check score (deep audits only)"),
+      date: z.string().describe("ISO date string of when the audit was run"),
+    }),
+  }
+);
+
 // ─── Export all tools ───────────────────────────────────────────────────────
 
 export const interviewTools = [scoreAnswer, getWeakAreas, searchKnowledgeBase];
 export const kickoffTools = [saveCoachingProfile, searchKnowledgeBase];
+export const linkedInTools = [saveLinkedInAnalysis, searchKnowledgeBase];

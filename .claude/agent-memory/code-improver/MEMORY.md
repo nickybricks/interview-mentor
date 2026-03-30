@@ -1,0 +1,1 @@
+- [Codebase Patterns & Architecture](project_codebase_patterns.md) — Key conventions, streaming pattern, auth model, recurring issues found in 2026-03-30 review

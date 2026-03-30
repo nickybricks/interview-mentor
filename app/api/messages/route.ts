@@ -11,6 +11,7 @@ import {
   DEFAULT_PROMPT,
   type PromptKey,
   buildCoachingContext,
+  buildLinkedInPrompt,
 } from "@/lib/prompts";
 import {
   readSettings,
@@ -25,7 +26,8 @@ import {
   retrieveWithQueryTranslation,
   type RAGSource,
 } from "@/lib/rag";
-import { interviewTools, kickoffTools } from "@/lib/tools";
+import { interviewTools, kickoffTools, linkedInTools } from "@/lib/tools";
+import { ToolMessage } from "@langchain/core/messages";
 import { getModelPricing } from "@/lib/model-pricing";
 
 // POST /api/messages - Send a message and get AI response (streaming)
@@ -101,11 +103,13 @@ export async function POST(request: NextRequest) {
 
     // Save user message (skip for autoStart and regenerate)
     if (!isAutoStart && !isRegenerate) {
+      const estimatedTokens = Math.ceil(sanitizedContent.length / 4);
       await prisma.message.create({
         data: {
           chatId,
           role: "user",
           content: sanitizedContent,
+          tokens: estimatedTokens,
         },
       });
     }
@@ -122,6 +126,11 @@ export async function POST(request: NextRequest) {
     } else if (chat.type === "preparation") {
       const promptKey = (persona || chat.persona || DEFAULT_PROMPT) as PromptKey;
       systemPrompt = PROMPTS[promptKey] || PROMPTS[DEFAULT_PROMPT];
+    } else if (chat.type === "linkedin") {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const chatMeta = chat.metadata as Record<string, any> | null;
+      const depthLevel = chatMeta?.depthLevel ?? "standard";
+      systemPrompt = buildLinkedInPrompt(chat.project, depthLevel);
     } else {
       systemPrompt = getDefaultSystemPrompt(featureKey);
     }
@@ -146,8 +155,8 @@ The user has returned with a follow-up question.
       contextInfo += `\n\n## Target Job Description:\n${chat.project.jobDescription}`;
     }
 
-    // RAG: Retrieve relevant context for preparation and mock_interview chats
-    const RAG_ENABLED_TYPES = ["preparation", "mock_interview", "kickoff"];
+    // RAG: Retrieve relevant context for preparation, mock_interview, kickoff, and linkedin chats
+    const RAG_ENABLED_TYPES = ["preparation", "mock_interview", "kickoff", "linkedin"];
     let ragSources: RAGSource[] = [];
     let ragContext = "";
     const userQuery = isAutoStart ? "" : isRegenerate ? "" : sanitizedContent;
@@ -232,26 +241,10 @@ The user has returned with a follow-up question.
       messageHistory.push({ role: "user", content: sanitizedContent });
     }
 
-    // Estimate user message tokens (rough: ~1 token per 4 chars)
-    if (!isAutoStart) {
-      const estimatedTokens = Math.ceil(sanitizedContent.length / 4);
-      // Update the user message we just created with token estimate
-      const lastUserMsg = await prisma.message.findFirst({
-        where: { chatId, role: "user" },
-        orderBy: { createdAt: "desc" },
-      });
-      if (lastUserMsg) {
-        await prisma.message.update({
-          where: { id: lastUserMsg.id },
-          data: { tokens: estimatedTokens },
-        });
-      }
-    }
-
     const modelUsed = featureSettings.model;
 
-    // Determine if tools should be available (preparation and kickoff chats)
-    const TOOL_ENABLED_TYPES = ["preparation", "kickoff"];
+    // Determine if tools should be available
+    const TOOL_ENABLED_TYPES = ["preparation", "kickoff", "linkedin"];
     const toolsEnabled = TOOL_ENABLED_TYPES.includes(chat.type) && !isAutoStart;
 
     const chatOptions = {
@@ -277,7 +270,12 @@ The user has returned with a follow-up question.
         try {
           if (toolsEnabled) {
             // ─── Tool-calling path ──────────────────────────────────────
-            const activeTools = chat.type === "kickoff" ? kickoffTools : interviewTools;
+            const activeTools =
+              chat.type === "kickoff"
+                ? kickoffTools
+                : chat.type === "linkedin"
+                  ? linkedInTools
+                  : interviewTools;
             const boundModel = createBoundModel(activeTools, chatOptions);
             const lcMessages = toLangChainMessages(messageHistory);
 
@@ -344,6 +342,9 @@ The user has returned with a follow-up question.
                   args.projectId = chat.projectId;
                   args.chatId = chatId;
                 }
+                if (tc.name === "save_linkedin_analysis") {
+                  args.projectId = chat.projectId;
+                }
 
                 // Find and execute the tool
                 const toolDef = activeTools.find((t) => t.name === tc.name);
@@ -383,7 +384,6 @@ The user has returned with a follow-up question.
                 }
 
                 // Add tool result as ToolMessage to conversation
-                const { ToolMessage } = await import("@langchain/core/messages");
                 lcMessages.push(
                   new ToolMessage({
                     content: toolResult,
@@ -392,6 +392,15 @@ The user has returned with a follow-up question.
                 );
               }
               // Loop back to get the LLM's final response incorporating tool results
+            }
+
+            // If the tool loop exhausted all iterations without a final text response
+            if (maxIterations <= 0 && !fullResponse) {
+              console.warn(`[messages] Tool loop hit max iterations for chat ${chatId}`);
+              fullResponse = "I wasn't able to complete that in time. Please try again.";
+              controller.enqueue(
+                encoder.encode(`data: ${JSON.stringify({ text: fullResponse })}\n\n`)
+              );
             }
           } else {
             // ─── Standard streaming path (no tools) ─────────────────────

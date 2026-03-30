@@ -19,6 +19,7 @@ export const translations = {
     "chatType.preparation": "Vorbereitung",
     "chatType.gap_analysis": "Gap-Analyse",
     "chatType.mock_interview": "Mock-Interview",
+    "chatType.linkedin": "LinkedIn",
 
     // New Project Dialog
     "newProject.title": "Neue Bewerbung",
@@ -123,6 +124,7 @@ export const translations = {
     "project.export": "Export als Markdown",
     "project.comingSoon": "Demnächst",
     "project.linkedinDesc": "Profil & Outreach optimieren",
+    "project.kickoffRequired": "Kickoff zuerst abschließen",
     "project.soon": "Bald",
     "project.empty.title": "Willkommen bei Interview Mentor",
     "project.empty.description": "Erstelle ein Bewerbungsprojekt in der Sidebar, um mit deiner Interviewvorbereitung zu starten.",
@@ -211,6 +213,7 @@ export const translations = {
     "chatType.preparation": "Preparation",
     "chatType.gap_analysis": "Gap Analysis",
     "chatType.mock_interview": "Mock Interview",
+    "chatType.linkedin": "LinkedIn",
 
     // New Project Dialog
     "newProject.title": "New Application",
@@ -315,6 +318,7 @@ export const translations = {
     "project.export": "Export as Markdown",
     "project.comingSoon": "Coming Soon",
     "project.linkedinDesc": "Profile & outreach optimization",
+    "project.kickoffRequired": "Complete kickoff first",
     "project.soon": "Soon",
     "project.empty.title": "Welcome to Interview Mentor",
     "project.empty.description": "Create a project in the sidebar to start your interview preparation.",

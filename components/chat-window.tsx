@@ -16,6 +16,7 @@ import {
   Mic,
   Square,
   Bot,
+  Briefcase,
   Paperclip,
   FileText,
   AlertCircle,
@@ -63,6 +64,7 @@ interface ChatData {
   type: string;
   persona: string;
   status: string;
+  metadata?: Record<string, unknown> | null;
   project: {
     id: string;
     name: string;
@@ -77,6 +79,7 @@ const CHAT_TYPE_ICONS: Record<string, React.ElementType> = {
   preparation: GraduationCap,
   gap_analysis: Search,
   mock_interview: Mic,
+  linkedin: Briefcase,
 };
 
 interface ChatWindowProps {
@@ -116,11 +119,13 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
 
   const kickoffSignalReceivedRef = useRef(false);
   const autoStartTriggered = useRef(false);
+  const linkedInAutoSendTriggered = useRef(false);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTypeRef = useRef<"cv" | "jobDescription" | "additional">("cv");
   const uploadMenuRef = useRef<HTMLDivElement>(null);
+  const sendingRef = useRef(false);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -128,6 +133,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
   // Fetch chat data
   useEffect(() => {
     autoStartTriggered.current = false;
+    linkedInAutoSendTriggered.current = false;
     const fetchChat = async () => {
       try {
         const res = await fetch(`/api/chats/${chatId}`);
@@ -195,53 +201,56 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
           for (const line of lines) {
             if (!line.startsWith("data: ")) continue;
             const jsonStr = line.slice(6);
+            let data: Record<string, unknown>;
             try {
-              const data = JSON.parse(jsonStr);
-              if (data.toolCall) {
-                const tc = data.toolCall as ToolCallDisplay;
-                const existingIdx = collectedToolCalls.findIndex(
-                  (t) => t.name === tc.name
-                );
-                if (existingIdx >= 0) {
-                  collectedToolCalls[existingIdx] = tc;
-                } else {
-                  collectedToolCalls.push(tc);
-                }
-                setActiveToolCalls([...collectedToolCalls]);
-                continue;
-              }
-              if (data.kickoff_complete) {
-                kickoffSignalReceivedRef.current = true;
-                continue;
-              }
-              if (data.sources) {
-                meta.sources = data.sources;
-                continue;
-              }
-              if (data.done) {
-                meta = {
-                  ...meta,
-                  messageId: data.messageId,
-                  inputTokens: data.inputTokens,
-                  outputTokens: data.outputTokens,
-                  totalTokens: data.totalTokens,
-                  model: data.model,
-                  inputCost: data.inputCost,
-                  outputCost: data.outputCost,
-                  totalCost: data.totalCost,
-                  tokensPerSec: data.tokensPerSec,
-                  durationMs: data.durationMs,
-                  version: data.version,
-                };
-                continue;
-              }
-              if (data.error) throw new Error(data.error);
-              if (data.text) {
-                fullContent += data.text;
-                setStreamingContent(fullContent);
-              }
+              data = JSON.parse(jsonStr);
             } catch {
-              // Skip malformed JSON lines
+              continue; // Skip malformed JSON lines
+            }
+
+            if (data.error) throw new Error(data.error as string);
+
+            if (data.toolCall) {
+              const tc = data.toolCall as ToolCallDisplay;
+              const existingIdx = collectedToolCalls.findIndex(
+                (t) => t.name === tc.name
+              );
+              if (existingIdx >= 0) {
+                collectedToolCalls[existingIdx] = tc;
+              } else {
+                collectedToolCalls.push(tc);
+              }
+              setActiveToolCalls([...collectedToolCalls]);
+              continue;
+            }
+            if (data.kickoff_complete) {
+              kickoffSignalReceivedRef.current = true;
+              continue;
+            }
+            if (data.sources) {
+              meta.sources = data.sources as RAGSourceDisplay[];
+              continue;
+            }
+            if (data.done) {
+              meta = {
+                ...meta,
+                messageId: data.messageId as string,
+                inputTokens: data.inputTokens as number,
+                outputTokens: data.outputTokens as number,
+                totalTokens: data.totalTokens as number,
+                model: data.model as string,
+                inputCost: data.inputCost as number,
+                outputCost: data.outputCost as number,
+                totalCost: data.totalCost as number,
+                tokensPerSec: data.tokensPerSec as number,
+                durationMs: data.durationMs as number,
+                version: data.version as { versionGroup: string; versionIndex: number; versionTotal: number },
+              };
+              continue;
+            }
+            if (data.text) {
+              fullContent += data.text;
+              setStreamingContent(fullContent);
             }
           }
         }
@@ -334,6 +343,94 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
 
     triggerIntro();
   }, [chat, loading, streaming, messages.length, chatId, t]);
+
+  useEffect(() => {
+    const profileText = chat?.metadata?.profileText;
+    if (
+      !chat ||
+      loading ||
+      streaming ||
+      linkedInAutoSendTriggered.current ||
+      messages.length > 0 ||
+      chat.type !== "linkedin" ||
+      !profileText ||
+      typeof profileText !== "string"
+    ) {
+      return;
+    }
+
+    linkedInAutoSendTriggered.current = true;
+
+    const sendProfile = async () => {
+      const userMessage: Message = {
+        id: `temp-${Date.now()}`,
+        role: "user",
+        content: profileText,
+        score: null,
+        category: null,
+        createdAt: new Date().toISOString(),
+        tokens: Math.ceil(profileText.length / 4),
+      };
+      setMessages([userMessage]);
+      setStreaming(true);
+      setStreamingContent("");
+
+      try {
+        const res = await fetch("/api/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chatId, content: profileText }),
+        });
+
+        if (!res.ok) throw new Error("Failed to start LinkedIn audit");
+
+        const { content: fullContent, meta } = await streamResponse(res);
+
+        if (fullContent) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: meta.messageId ?? `assistant-${Date.now()}`,
+              role: "assistant",
+              content: fullContent,
+              score: null,
+              category: null,
+              createdAt: new Date().toISOString(),
+              tokens: meta.outputTokens,
+              inputTokens: meta.inputTokens,
+              model: meta.model,
+              cost: meta.totalCost,
+              inputCost: meta.inputCost,
+              outputCost: meta.outputCost,
+              tokensPerSec: meta.tokensPerSec,
+              durationMs: meta.durationMs,
+              sources: meta.sources,
+              toolCalls: meta.toolCalls,
+            },
+          ]);
+        }
+      } catch (err) {
+        console.error("LinkedIn auto-send failed:", err);
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `error-${Date.now()}`,
+            role: "assistant",
+            content: `Failed to start LinkedIn audit. Please send your profile again.`,
+            score: null,
+            category: null,
+            createdAt: new Date().toISOString(),
+          },
+        ]);
+      } finally {
+        setStreaming(false);
+        setStreamingContent("");
+        setActiveToolCalls([]);
+      }
+    };
+
+    sendProfile();
+  }, [chat, loading, messages.length, chatId]);
 
   // ─── File upload: stage → send ───────────────────────────────────────────
 
@@ -429,7 +526,8 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     // Allow sending with just a file (no text) or just text (no file)
     const text = input.trim();
     if (!text && !stagedFile) return;
-    if (streaming || uploading) return;
+    if (streaming || uploading || sendingRef.current) return;
+    sendingRef.current = true;
 
     // If there's a staged file, upload it first
     const currentStaged = stagedFile;
@@ -518,6 +616,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
         },
       ]);
     } finally {
+      sendingRef.current = false;
       setStreaming(false);
       setStreamingContent("");
       setActiveToolCalls([]);

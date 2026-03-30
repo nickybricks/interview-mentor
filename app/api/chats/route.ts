@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { projectId, type = "preparation", persona = "structured" } = body;
+    const { projectId, type = "preparation", persona = "structured", metadata } = body;
 
     if (!projectId) {
       return NextResponse.json(
@@ -66,6 +66,7 @@ export async function POST(request: NextRequest) {
         projectId,
         type,
         persona,
+        ...(metadata != null && { metadata }),
       },
     });
 

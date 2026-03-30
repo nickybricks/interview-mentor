@@ -23,6 +23,8 @@ model Project {
   chats           Chat[]
   documents       Document[]
   vectorDocuments VectorDocument[]
+
+  @@index([sessionId])
 }
 
 model Document {
@@ -42,8 +44,11 @@ model Chat {
   type      String    @default("preparation")
   persona   String    @default("structured")
   status    String    @default("active")
+  metadata  Json?
   createdAt DateTime  @default(now())
   messages  Message[]
+
+  @@index([projectId])
 }
 
 model Message {
@@ -63,6 +68,9 @@ model Message {
   active       Boolean  @default(true)
   toolCalls    Json?
   createdAt    DateTime @default(now())
+
+  @@index([chatId, role, active])
+  @@index([versionGroup])
 }
 
 model AiSettings {

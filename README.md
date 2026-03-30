@@ -4,12 +4,13 @@ AI-powered interview preparation app that helps job applicants practice for inte
 
 ## Project Overview
 
-Interview Mentor is a full-stack web application that acts as an AI interview coach. Users create a project and are guided through four phases:
+Interview Mentor is a full-stack web application that acts as an AI interview coach. Users create a project and are guided through five phases:
 
 1. **Kickoff** — Conversational onboarding where the AI coach gets to know the candidate, analyzes their CV, builds a coaching profile, and creates a personalized preparation plan
 2. **Gap Analysis** — Compares the CV against the job description to identify strengths, gaps, and areas to improve
-3. **Interview Preparation** — Asks targeted questions from 5 categories (Experience, Problem-Solving, Leadership, Technical, Motivation), provides detailed feedback with scores (1–10), and uses spaced repetition to focus on weak areas
+3. **Interview Preparation** — Asks targeted questions from 5 categories (Experience, Problem-Solving, Leadership, Technical, Motivation), provides detailed feedback with scores (1–10), and uses spaced repetition to focus on weak areas (unlocked after kickoff)
 4. **Mock Interviews** — Simulates a realistic interview session (unlocked when the user's average score reaches 7.0+)
+5. **LinkedIn Optimization** — AI-powered LinkedIn profile audit with three depth levels (quick/standard/deep), section-by-section scoring, content strategy, and consistency checks against CV and coaching state (unlocked after kickoff)
 
 The AI coach uses a 50-question bank from the WHO interview method (Screening → Topgrading → Focused → Reference) and adapts questions to the candidate's profile.
 
@@ -33,6 +34,8 @@ The AI coach uses a 50-question bank from the WHO interview method (Screening �
 - **Gap Analysis** — Automated CV vs. job description comparison with markdown-rendered results (UI hidden pending further development)
 - **Interview Preparation** — AI-coached practice with coaching-state-aware session flow: opens with kickoff context (target role, concerns, story seeds, coaching mode), eliminates redundant onboarding, adapts intensity to triage/focused/full mode, and drills interviewer concerns proactively
 - **Mock Interviews** — Simulated interview sessions (unlocked at score ≥ 7.0, enhanced with coaching context)
+- **LinkedIn Optimization** — Three-depth LinkedIn profile audit (quick/standard/deep) with 9-section analysis, recruiter discoverability scoring, content strategy, consistency checks against CV, challenge protocol, and persistent results saved to coaching state
+- **Progressive Unlocking** — Preparation, Mock Interview, and LinkedIn sessions are locked until kickoff is completed, ensuring coaching state context is always available
 - **AI Settings Panel** — Per-feature model selection, temperature, top-p, frequency penalty, editable system prompts
 - **RAG Knowledge Base** — 11 curated coaching documents (scoring rubrics, STAR method, earned secrets, coaching frameworks, drills) embedded via pgvector for context-aware responses
 - **Tool Calling** — LangChain tools for answer scoring (5-dimension rubric), weak area tracking, and knowledge base search

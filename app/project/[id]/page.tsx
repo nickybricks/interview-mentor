@@ -30,6 +30,7 @@ import {
   Loader2,
   ChevronDown,
   Bot,
+  X,
 } from "lucide-react";
 
 interface ProjectDetail {
@@ -51,11 +52,30 @@ interface ProjectDetail {
   chats: {
     id: string;
     type: string;
+    status: string;
     createdAt: string;
     messages: { content: string; createdAt: string }[];
   }[];
   categoryScores?: { name: string; avg: number; count: number }[];
 }
+
+const LINKEDIN_PASTE_TEMPLATE = `Headline:
+
+About / Summary:
+
+Current Role Title + Description:
+
+Previous Role(s) Title + Description:
+
+Skills (top 10):
+
+Education:
+
+Certifications / Licenses:
+
+Recommendations (optional):
+
+Featured / Projects (optional):`;
 
 export default function ProjectPage() {
   const params = useParams<{ id: string }>();
@@ -66,6 +86,11 @@ export default function ProjectPage() {
   const [gapLoading, setGapLoading] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [gapOpen, setGapOpen] = useState(false);
+  const [linkedInModalOpen, setLinkedInModalOpen] = useState(false);
+  const [linkedInDepth, setLinkedInDepth] = useState<"quick" | "standard" | "deep">("standard");
+  const [linkedInProfile, setLinkedInProfile] = useState("");
+  const [linkedInStarting, setLinkedInStarting] = useState(false);
+  const [linkedInError, setLinkedInError] = useState<string | null>(null);
 
   const fetchProject = async () => {
     try {
@@ -142,20 +167,35 @@ export default function ProjectPage() {
     }
   };
 
-  const startChat = async (type: string) => {
+  const startChat = async (type: string, metadata?: Record<string, unknown>): Promise<boolean> => {
+    const res = await fetch("/api/chats", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ projectId: params.id, type, ...(metadata && { metadata }) }),
+    });
+    if (!res.ok) return false;
+    const chat = await res.json();
+    window.dispatchEvent(new Event("projects-changed"));
+    router.push(`/project/${params.id}/chat/${chat.id}`);
+    return true;
+  };
+
+  const startLinkedInAudit = async () => {
+    if (!linkedInProfile.trim()) return;
+    setLinkedInStarting(true);
+    setLinkedInError(null);
     try {
-      const res = await fetch("/api/chats", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ projectId: params.id, type }),
-      });
-      if (res.ok) {
-        const chat = await res.json();
-        window.dispatchEvent(new Event("projects-changed"));
-        router.push(`/project/${params.id}/chat/${chat.id}`);
+      const ok = await startChat("linkedin", { depthLevel: linkedInDepth, profileText: linkedInProfile });
+      if (ok) {
+        setLinkedInModalOpen(false);
+      } else {
+        setLinkedInError("Failed to start LinkedIn audit. Please try again.");
       }
     } catch (err) {
-      console.error("Failed to create chat:", err);
+      console.error("Failed to start LinkedIn audit:", err);
+      setLinkedInError("Failed to start LinkedIn audit. Please try again.");
+    } finally {
+      setLinkedInStarting(false);
     }
   };
 
@@ -177,6 +217,9 @@ export default function ProjectPage() {
 
   const score = project.overallScore ?? 0;
   const mockUnlocked = score >= 7;
+  const kickoffCompleted = project.chats.some(
+    (c) => c.type === "kickoff" && c.status === "completed"
+  );
 
   return (
     <div className="h-full overflow-y-auto">
@@ -265,13 +308,21 @@ export default function ProjectPage() {
               <button
                 type="button"
                 onClick={() => startChat("preparation")}
-                className="flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                disabled={!kickoffCompleted}
+                className="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               >
                 <GraduationCap className="size-8 text-blue-600" />
                 <span className="font-medium">{t("chatType.preparation")}</span>
                 <span className="text-xs text-muted-foreground">
-                  {t("project.prepQuestions")}
+                  {kickoffCompleted
+                    ? t("project.prepQuestions")
+                    : t("project.kickoffRequired")}
                 </span>
+                {!kickoffCompleted && (
+                  <Badge variant="outline" className="absolute -top-2 -right-2 text-[10px]">
+                    {t("project.locked")}
+                  </Badge>
+                )}
               </button>
 
               {/* Mock Interview */}
@@ -296,19 +347,30 @@ export default function ProjectPage() {
               </button>
             </div>
 
-            {/* Coming Soon */}
-            <div className="mt-4 space-y-2">
-              <p className="text-xs font-medium text-muted-foreground">{t("project.comingSoon")}</p>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center cursor-default opacity-50">
-                  <span className="text-3xl leading-none" aria-hidden="true">💼</span>
-                  <span className="font-medium">LinkedIn</span>
-                  <span className="text-xs text-muted-foreground">{t("project.linkedinDesc")}</span>
+            {/* LinkedIn card — requires completed kickoff so coaching state exists */}
+            <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <button
+                type="button"
+                onClick={() => {
+                  setLinkedInProfile(LINKEDIN_PASTE_TEMPLATE);
+                  setLinkedInModalOpen(true);
+                }}
+                disabled={!kickoffCompleted}
+                className="group relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-muted/50 disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <Briefcase className="size-8 text-blue-500" />
+                <span className="font-medium">LinkedIn</span>
+                <span className="text-xs text-muted-foreground">
+                  {kickoffCompleted
+                    ? t("project.linkedinDesc")
+                    : t("project.kickoffRequired")}
+                </span>
+                {!kickoffCompleted && (
                   <Badge variant="outline" className="absolute -top-2 -right-2 text-[10px]">
-                    {t("project.soon")}
+                    {t("project.locked")}
                   </Badge>
-                </div>
-              </div>
+                )}
+              </button>
             </div>
           </CardContent>
         </Card>
@@ -409,7 +471,7 @@ export default function ProjectPage() {
                         />
                       </div>
                       <span className="w-16 text-right text-muted-foreground">
-                        {cat.avg}/10
+                        {cat.avg.toFixed(1)}/10
                       </span>
                     </div>
                   ))}
@@ -435,6 +497,100 @@ export default function ProjectPage() {
           </Button>
         </div>
       </div>
+
+      {/* LinkedIn Setup Modal */}
+      {linkedInModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onKeyDown={(e) => e.key === "Escape" && setLinkedInModalOpen(false)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="linkedin-modal-title"
+            className="relative w-full max-w-lg rounded-xl border bg-background shadow-xl"
+          >
+            <div className="flex items-center justify-between border-b p-5">
+              <div>
+                <h2 id="linkedin-modal-title" className="text-lg font-semibold">LinkedIn Profile Audit</h2>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  Paste your profile and choose an audit depth to get started.
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="Close LinkedIn audit dialog"
+                onClick={() => setLinkedInModalOpen(false)}
+                className="rounded-md p-1 text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4 p-5">
+              {/* Depth selector */}
+              <div>
+                <p className="mb-2 text-sm font-medium">Audit depth</p>
+                <div className="grid grid-cols-3 gap-2">
+                  {(["quick", "standard", "deep"] as const).map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      onClick={() => setLinkedInDepth(level)}
+                      className={`rounded-lg border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        linkedInDepth === level
+                          ? "border-blue-500 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
+                          : "hover:bg-muted/50"
+                      }`}
+                    >
+                      {level === "quick" && "Quick Audit"}
+                      {level === "standard" && "Standard"}
+                      {level === "deep" && "Deep Optimization"}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {linkedInDepth === "quick" && "Headline, About & Skills only — top 3 fixes in one response."}
+                  {linkedInDepth === "standard" && "All 9 sections audited + content strategy (if time allows)."}
+                  {linkedInDepth === "deep" && "Full audit + consistency check + challenge protocol."}
+                </p>
+              </div>
+
+              {/* Profile paste area */}
+              <div>
+                <p className="mb-2 text-sm font-medium">Paste your LinkedIn profile</p>
+                <textarea
+                  value={linkedInProfile}
+                  onChange={(e) => setLinkedInProfile(e.target.value)}
+                  rows={12}
+                  placeholder={LINKEDIN_PASTE_TEMPLATE}
+                  className="w-full rounded-md border bg-background px-3 py-2 text-sm font-mono leading-relaxed text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:ring-2 focus:ring-ring resize-none"
+                />
+              </div>
+            </div>
+
+            {linkedInError && (
+              <p className="px-5 text-sm text-destructive">{linkedInError}</p>
+            )}
+            <div className="flex justify-end gap-2 border-t px-5 py-4">
+              <Button variant="outline" onClick={() => setLinkedInModalOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={startLinkedInAudit}
+                disabled={linkedInStarting || !linkedInProfile.trim()}
+              >
+                {linkedInStarting ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <Briefcase className="mr-2 size-4" />
+                )}
+                Start LinkedIn Audit
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
