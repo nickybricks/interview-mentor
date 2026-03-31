@@ -18,6 +18,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useI18n } from "@/lib/i18n";
+import { getSessionId } from "@/lib/session";
 import {
   FileText,
   Plus,
@@ -91,6 +92,7 @@ export function DocumentsManager({
 
         const res = await fetch("/api/upload", {
           method: "POST",
+          headers: { "x-session-id": getSessionId() },
           body: formData,
         });
 

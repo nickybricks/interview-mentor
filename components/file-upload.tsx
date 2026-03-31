@@ -3,6 +3,7 @@
 import { useState, useRef } from "react";
 import { Upload, FileText, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import { useI18n } from "@/lib/i18n";
+import { getSessionId } from "@/lib/session";
 
 interface FileUploadProps {
   projectId: string;
@@ -48,6 +49,7 @@ export function FileUpload({
 
         const res = await fetch("/api/upload", {
           method: "POST",
+          headers: { "x-session-id": getSessionId() },
           body: formData,
         });
 
