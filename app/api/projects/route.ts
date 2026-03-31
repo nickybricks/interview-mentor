@@ -61,16 +61,7 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    // Auto-create a kickoff chat for the new project
-    const kickoffChat = await prisma.chat.create({
-      data: {
-        projectId: project.id,
-        type: "kickoff",
-        persona: "structured",
-      },
-    });
-
-    return NextResponse.json({ ...project, kickoffChatId: kickoffChat.id }, { status: 201 });
+    return NextResponse.json(project, { status: 201 });
   } catch (error) {
     console.error("Failed to create project:", error);
     return NextResponse.json(

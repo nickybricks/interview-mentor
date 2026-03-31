@@ -1,9 +1,9 @@
 {
   "name": "interview-mentor",
-  "version": "0.13.1",
+  "version": "0.13.2",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint",
