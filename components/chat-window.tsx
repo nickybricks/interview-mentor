@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { ToolCallCard, type ToolCallDisplay } from "@/components/tool-call-card";
 import dynamic from "next/dynamic";
+import { getSessionId } from "@/lib/session";
 
 // Lazy-load overlay — only shown after kickoff completion (bundle-dynamic-imports)
 const KickoffCompleteOverlay = dynamic(() =>
@@ -285,7 +286,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
       try {
         const res = await fetch("/api/messages", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "x-session-id": getSessionId() },
           body: JSON.stringify({ chatId, autoStart: true }),
         });
 
@@ -378,7 +379,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
       try {
         const res = await fetch("/api/messages", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", "x-session-id": getSessionId() },
           body: JSON.stringify({ chatId, content: profileText }),
         });
 
@@ -502,6 +503,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
 
       const res = await fetch("/api/upload", {
         method: "POST",
+        headers: { "x-session-id": getSessionId() },
         body: formData,
       });
 
@@ -566,7 +568,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     try {
       const res = await fetch("/api/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-session-id": getSessionId() },
         body: JSON.stringify({
           chatId,
           content: messageContent,
@@ -648,7 +650,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
     try {
       const res = await fetch("/api/messages", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "x-session-id": getSessionId() },
         body: JSON.stringify({ chatId, regenerate: true }),
       });
 
@@ -807,6 +809,7 @@ export function ChatWindow({ chatId }: ChatWindowProps) {
 
           const res = await fetch(`/api/transcribe?locale=${locale}`, {
             method: "POST",
+            headers: { "x-session-id": getSessionId() },
             body: formData,
           });
 

@@ -27,6 +27,7 @@ The AI coach uses a 50-question bank from the WHO interview method (Screening �
 | **shadcn/ui** (base-nova) | Pre-built UI components |
 | **react-markdown** + remark-gfm | Markdown rendering for AI responses |
 | **@vercel/analytics** + **@vercel/speed-insights** | Usage analytics and Core Web Vitals tracking |
+| **Upstash Redis** + **@upstash/ratelimit** | Serverless Redis for sliding-window rate limiting |
 
 ## Features
 
@@ -40,6 +41,7 @@ The AI coach uses a 50-question bank from the WHO interview method (Screening �
 - **RAG Knowledge Base** — 11 curated coaching documents (scoring rubrics, STAR method, earned secrets, coaching frameworks, drills) embedded via pgvector for context-aware responses
 - **Tool Calling** — LangChain tools for answer scoring (5-dimension rubric), weak area tracking, and knowledge base search
 - **Security Guards** — Defense-in-depth prompt injection protection (prompt-level LLM guardrail + input sanitization)
+- **Rate Limiting** — Upstash Redis sliding-window rate limits on AI, transcription, and upload endpoints (20/10/5 req/min per IP) via Next.js middleware
 - **Voice Input** — Speech-to-text via OpenAI Whisper with locale-aware language detection
 - **Multi-File Upload** — CV, job description, and additional documents (certificates, references, transcripts)
 - **Internationalization** — German (default) and English with instant switching — covers UI, API routes, prompts, export labels, and Whisper transcription language
