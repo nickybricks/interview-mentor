@@ -421,7 +421,6 @@ export const saveLinkedInAnalysis = tool(
     topFixesPending,
     depthLevel,
     consistencyScore,
-    date,
   }) => {
     try {
       const project = await prisma.project.findUnique({
@@ -444,7 +443,7 @@ export const saveLinkedInAnalysis = tool(
           topFixesPending: topFixesPending ?? [],
           depthLevel,
           consistencyScore: consistencyScore ?? null,
-          date,
+          date: new Date().toISOString(),
         },
       };
 
@@ -495,13 +494,146 @@ export const saveLinkedInAnalysis = tool(
         .nullable()
         .optional()
         .describe("Consistency check score (deep audits only)"),
-      date: z.string().describe("ISO date string of when the audit was run"),
+    }),
+  }
+);
+
+// ─── Tool 6: update_coaching_state ──────────────────────────────────────────
+
+const dimensionsSchema = z.object({
+  substance: z.number().min(1).max(5).describe("Substance score 1-5"),
+  structure: z.number().min(1).max(5).describe("Structure score 1-5"),
+  relevance: z.number().min(1).max(5).describe("Relevance score 1-5"),
+  credibility: z.number().min(1).max(5).describe("Credibility score 1-5"),
+  differentiation: z.number().min(1).max(5).describe("Differentiation score 1-5"),
+});
+
+export const updateCoachingState = tool(
+  async ({ action, projectId, question, score, dimensions, category, summary, questionsAsked, averageScore, weakestDimension, patterns }) => {
+    try {
+      const project = await prisma.project.findUnique({
+        where: { id: projectId },
+        select: { coachingState: true },
+      });
+
+      const existing =
+        project?.coachingState && typeof project.coachingState === "object"
+          ? (project.coachingState as Record<string, unknown>)
+          : {};
+
+      const now = new Date().toISOString();
+
+      if (action === "addQuestion") {
+        const currentBank = Array.isArray(existing.questionBank)
+          ? (existing.questionBank as import("@/lib/types/coaching-state").QuestionBankEntry[])
+          : [];
+
+        const newEntry: import("@/lib/types/coaching-state").QuestionBankEntry = {
+          id: `q-${Date.now()}`,
+          question: question!,
+          category: category ?? "general",
+          difficulty: "medium",
+          timesAsked: 1,
+          bestScore: score ?? null,
+          lastAsked: now,
+          flagged: (score ?? 0) < 7,
+          dimensions: dimensions ?? null,
+        };
+
+        await prisma.project.update({
+          where: { id: projectId },
+          data: {
+            coachingState: JSON.parse(JSON.stringify({
+              ...existing,
+              questionBank: [...currentBank, newEntry],
+              updatedAt: now,
+            })),
+          },
+        });
+
+        return JSON.stringify({ success: true, action: "addQuestion" });
+      }
+
+      if (action === "endSession") {
+        const currentSessions = Array.isArray(existing.sessions)
+          ? (existing.sessions as import("@/lib/types/coaching-state").SessionEntry[])
+          : [];
+
+        const newSession: import("@/lib/types/coaching-state").SessionEntry = {
+          id: `session-${Date.now()}`,
+          chatId: null,
+          type: "preparation",
+          date: now,
+          duration: null,
+          questionsAsked: questionsAsked ?? 0,
+          avgScore: averageScore ?? null,
+          focusAreas: [],
+          keyInsights: [],
+          summary: summary ?? null,
+          weakestDimension: weakestDimension ?? null,
+        };
+
+        let updatedPatterns = Array.isArray(existing.patterns)
+          ? (existing.patterns as import("@/lib/types/coaching-state").PatternEntry[])
+          : [];
+
+        if (patterns && patterns.length > 0) {
+          const patternEntries: import("@/lib/types/coaching-state").PatternEntry[] = patterns.map((p) => ({
+            dimension: weakestDimension ?? "general",
+            pattern: p,
+            frequency: 1,
+            firstSeen: now,
+            rootCause: null,
+            addressed: false,
+          }));
+          updatedPatterns = [...updatedPatterns, ...patternEntries];
+        }
+
+        await prisma.project.update({
+          where: { id: projectId },
+          data: {
+            coachingState: JSON.parse(JSON.stringify({
+              ...existing,
+              sessions: [...currentSessions, newSession],
+              patterns: updatedPatterns,
+              updatedAt: now,
+            })),
+          },
+        });
+
+        return JSON.stringify({ success: true, action: "endSession" });
+      }
+
+      return JSON.stringify({ success: false, error: "Unknown action" });
+    } catch (err) {
+      console.error("updateCoachingState failed:", err);
+      return JSON.stringify({ success: false, error: "Failed to update coaching state." });
+    }
+  },
+  {
+    name: "update_coaching_state",
+    description:
+      "Persist preparation session progress to the coaching state. Use 'addQuestion' after scoring each answer to record the question and score. Use 'endSession' when the session is wrapping up to save a session summary and any detected patterns. Never use this for kickoff — that is handled by save_coaching_profile.",
+    schema: z.object({
+      action: z.enum(["addQuestion", "endSession"]).describe("'addQuestion' to log a scored question, 'endSession' to save a session summary"),
+      projectId: z.string().describe("The project ID to update"),
+      // addQuestion fields
+      question: z.string().optional().describe("(addQuestion) The interview question asked"),
+      score: z.number().min(1).max(10).optional().describe("(addQuestion) Overall score 1-10"),
+      dimensions: dimensionsSchema.optional().describe("(addQuestion) Per-dimension scores 1-5"),
+      category: z.string().optional().describe("(addQuestion) Question category: screening, deep_dive, behavioral, technical"),
+      // endSession fields
+      summary: z.string().optional().describe("(endSession) 2-3 sentence session summary"),
+      questionsAsked: z.number().optional().describe("(endSession) How many questions were scored this session"),
+      averageScore: z.number().optional().describe("(endSession) Average score across the session"),
+      weakestDimension: z.string().optional().describe("(endSession) The dimension that was weakest across the session"),
+      patterns: z.array(z.string()).optional().describe("(endSession) Recurring patterns detected, e.g. 'Structure consistently weak'"),
     }),
   }
 );
 
 // ─── Export all tools ───────────────────────────────────────────────────────
 
-export const interviewTools = [scoreAnswer, getWeakAreas, searchKnowledgeBase];
+export const interviewTools = [scoreAnswer, getWeakAreas, searchKnowledgeBase, updateCoachingState];
 export const kickoffTools = [saveCoachingProfile, searchKnowledgeBase];
 export const linkedInTools = [saveLinkedInAnalysis, searchKnowledgeBase];

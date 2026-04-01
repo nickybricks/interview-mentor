@@ -129,7 +129,7 @@ Active for `preparation` and `mock_interview` chats only (gap analysis uses the 
 
 ## LangChain Tools
 
-4 tools defined in `lib/tools.ts` using `tool()` from `@langchain/core/tools` with Zod schemas:
+5 tools defined in `lib/tools.ts` using `tool()` from `@langchain/core/tools` with Zod schemas:
 
 | Tool | Purpose | Used In |
 |---|---|---|
@@ -137,6 +137,7 @@ Active for `preparation` and `mock_interview` chats only (gap analysis uses the 
 | `getWeakAreas` | Queries flagged messages grouped by category, returns average scores and sample questions per weak area | Preparation, Mock Interview |
 | `searchKnowledgeBase` | Searches RAG knowledge base via `retrieveContext()`, returns top 5 results with source, similarity, and preview | Preparation, Mock Interview, Kickoff |
 | `saveCoachingProfile` | Persists the candidate's coaching state (profile, resume analysis, strategy, readiness assessment) to the database after the kickoff conversation | Kickoff |
+| `updateCoachingState` | Persists preparation session progress — `addQuestion` logs each scored answer (with per-dimension scores) to the question bank; `endSession` saves a session summary, average score, weakest dimension, and detected patterns | Preparation, Mock Interview |
 
 ## API Routes
 

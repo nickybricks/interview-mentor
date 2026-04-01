@@ -61,6 +61,13 @@ export interface QuestionBankEntry {
   bestScore: number | null;
   lastAsked: string | null;
   flagged: boolean;
+  dimensions?: {
+    substance: number;
+    structure: number;
+    relevance: number;
+    credibility: number;
+    differentiation: number;
+  } | null;
 }
 
 // ─── Patterns & Feedback ─────────────────────────────────────────────────
@@ -161,7 +168,7 @@ export interface MetaCheckEntry {
 
 export interface SessionEntry {
   id: string;
-  chatId: string;
+  chatId: string | null;
   type: "kickoff" | "preparation" | "mock_interview" | "gap_analysis";
   date: string;
   duration: number | null;
@@ -169,6 +176,8 @@ export interface SessionEntry {
   avgScore: number | null;
   focusAreas: string[];
   keyInsights: string[];
+  summary?: string | null;
+  weakestDimension?: string | null;
 }
 
 // ─── Main Coaching State ─────────────────────────────────────────────────

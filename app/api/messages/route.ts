@@ -194,7 +194,11 @@ The user has returned with a follow-up question.
     }
 
     // Build full system prompt: base + CV/JD context + RAG context
+    // LinkedIn prompt already includes the current date via buildLinkedInPrompt; inject for all other types here.
     let fullSystemPrompt = systemPrompt + contextInfo;
+    if (chat.type !== "linkedin") {
+      fullSystemPrompt += `\n\nCURRENT DATE (UTC): ${new Date().toISOString()}`;
+    }
     if (ragContext) {
       fullSystemPrompt += `\n\n## Relevant Context\nThe following excerpts were retrieved from the knowledge base and uploaded documents. Use them to inform your response when relevant:\n\n${ragContext}`;
     }
@@ -244,7 +248,7 @@ The user has returned with a follow-up question.
     const modelUsed = featureSettings.model;
 
     // Determine if tools should be available
-    const TOOL_ENABLED_TYPES = ["preparation", "kickoff", "linkedin"];
+    const TOOL_ENABLED_TYPES = ["preparation", "mock_interview", "kickoff", "linkedin"];
     const toolsEnabled = TOOL_ENABLED_TYPES.includes(chat.type) && !isAutoStart;
 
     const chatOptions = {
@@ -343,6 +347,9 @@ The user has returned with a follow-up question.
                   args.chatId = chatId;
                 }
                 if (tc.name === "save_linkedin_analysis") {
+                  args.projectId = chat.projectId;
+                }
+                if (tc.name === "update_coaching_state") {
                   args.projectId = chat.projectId;
                 }
 
@@ -482,6 +489,21 @@ The user has returned with a follow-up question.
 
           // Batch post-stream DB updates in parallel (async-parallel)
           const postStreamUpdates: Promise<unknown>[] = [];
+
+          // Persist RAG sources (non-blocking — schema field may not be in older client versions)
+          if (ragSources.length > 0) {
+            postStreamUpdates.push(
+              prisma.message.update({
+                where: { id: assistantMessage.id },
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                data: { sources: ragSources.map((s) => ({
+                  source: s.source,
+                  similarity: Math.round(s.similarity * 1000) / 1000,
+                  preview: s.content.slice(0, 100),
+                })) as any },
+              }).catch((err) => console.warn("[messages] sources update skipped:", err))
+            );
+          }
 
           // Update assistant message category
           if (extractedCategory) {

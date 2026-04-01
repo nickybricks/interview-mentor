@@ -67,6 +67,7 @@ model Message {
   versionGroup String?
   active       Boolean  @default(true)
   toolCalls    Json?
+  sources      Json?
   createdAt    DateTime @default(now())
 
   @@index([chatId, role, active])
